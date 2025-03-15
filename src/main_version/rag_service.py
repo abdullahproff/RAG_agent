@@ -1,3 +1,37 @@
+"""
+RAG (Retrieval-Augmented Generation) сервис с WebSocket интерфейсом.
+
+Этот модуль реализует сервис для обработки запросов с использованием RAG подхода,
+комбинируя векторный поиск по базе знаний с генеративной языковой моделью GigaChat.
+Сервис обрабатывает запросы через WebSocket интерфейс и поддерживает различные
+сценарии использования через предопределенные промпты.
+
+Основные возможности:
+    - Загрузка и обработка текстовых документов
+    - Создание векторных представлений текста
+    - Семантический поиск по базе знаний
+    - Генерация ответов с учетом контекста
+    - WebSocket API для взаимодействия с клиентами
+    - Поддержка различных ролей и специализаций
+
+Компоненты:
+    - Векторные хранилища для разных наборов документов
+    - Языковая модель GigaChat для генерации ответов
+    - FastAPI сервер с WebSocket endpoint
+    - Набор предопределенных промптов для разных сценариев
+
+Требования:
+    - Python 3.6+
+    - FastAPI
+    - LangChain
+    - GigaChat API ключ
+    - Sentence Transformers
+    - FAISS
+
+Пример использования:
+    $ python rag_service.py
+"""
+
 import os
 from dotenv import load_dotenv
 import string
@@ -30,9 +64,27 @@ folder_path_3 = os.path.join(os.path.dirname(__file__), "txt_docs/docs_pack_3")
 
 folder_path_full = os.path.join(os.path.dirname(__file__), "txt_docs/docs_pack_full")
 
+
 def create_docs_from_txt(folder_path):
+    """
+    Создает список документов из текстовых файлов в указанной директории.
+
+    Args:
+        folder_path (str): Путь к директории с текстовыми файлами.
+
+    Returns:
+        list[Document]: Список документов, разбитых на чанки.
+
+    Note:
+        Функция разбивает каждый документ на чанки размером 500 символов
+        с перекрытием 100 символов для лучшего поиска.
+    """
     # Получаем список всех файлов .txt в указанной директории
-    file_paths = [os.path.join(folder_path, f) for f in os.listdir(folder_path) if f.endswith(".txt")]
+    file_paths = [
+        os.path.join(folder_path, f)
+        for f in os.listdir(folder_path)
+        if f.endswith(".txt")
+    ]
 
     # Список для хранения загруженных документов
     docs = []
@@ -44,11 +96,11 @@ def create_docs_from_txt(folder_path):
 
     # Разделяем текст на чанки
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=500,  # Размер чанка
-        chunk_overlap=100  # Перекрытие между чанками
+        chunk_size=500, chunk_overlap=100  # Размер чанка  # Перекрытие между чанками
     )
     split_docs = text_splitter.split_documents(docs)
     return split_docs
+
 
 # Документы по Специалисту аналитику
 split_docs_1 = create_docs_from_txt(folder_path_1)
@@ -61,12 +113,10 @@ split_docs_full = create_docs_from_txt(folder_path_full)
 
 # Инициализация модели для эмбеддингов
 model_name = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
-model_kwargs = {'device': 'cpu'}
-encode_kwargs = {'normalize_embeddings': False}
+model_kwargs = {"device": "cpu"}
+encode_kwargs = {"normalize_embeddings": False}
 embedding = HuggingFaceEmbeddings(
-    model_name=model_name,
-    model_kwargs=model_kwargs,
-    encode_kwargs=encode_kwargs
+    model_name=model_name, model_kwargs=model_kwargs, encode_kwargs=encode_kwargs
 )
 
 # Создание векторного хранилища 1
@@ -88,8 +138,26 @@ embedding_retriever_full = vector_store_full.as_retriever(search_kwargs={"k": 5}
 
 # Инициализация модели GigaChat
 
-def create_retrieval_chain_from_folder(role, specialization, prompt_template, embedding_retriever):
 
+def create_retrieval_chain_from_folder(
+    role, specialization, prompt_template, embedding_retriever
+):
+    """
+    Создает цепочку для поиска и генерации ответов на основе предоставленных параметров.
+
+    Args:
+        role (str): Роль пользователя (например, "Аналитик", "Менеджер").
+        specialization (str): Специализация пользователя.
+        prompt_template (str): Шаблон промпта для генерации ответа.
+        embedding_retriever: Объект для поиска релевантных документов.
+
+    Returns:
+        Chain: Цепочка LangChain для обработки запросов.
+
+    Note:
+        Функция использует GigaChat для генерации ответов и поддерживает
+        различные сценарии использования через разные промпты.
+    """
     # Заполнение шаблона промпта
     template = string.Template(prompt_template)
     filled_prompt = template.substitute(role=role, specialization=specialization)
@@ -98,26 +166,42 @@ def create_retrieval_chain_from_folder(role, specialization, prompt_template, em
     prompt = ChatPromptTemplate.from_template(filled_prompt)
 
     llm = GigaChat(
-    credentials=api_key,
-    model='GigaChat',
-    verify_ssl_certs=False,
-    profanity_check=False
-)
+        credentials=api_key,
+        model="GigaChat",
+        verify_ssl_certs=False,
+        profanity_check=False,
+    )
 
     # Создание цепочки для работы с документами
-    document_chain = create_stuff_documents_chain(
-        llm=llm,
-        prompt=prompt
-    )
+    document_chain = create_stuff_documents_chain(llm=llm, prompt=prompt)
 
     # Создание retrieval_chain
     retrieval_chain = create_retrieval_chain(embedding_retriever, document_chain)
 
     return retrieval_chain
 
+
+# Обрабатывает WebSocket соединение и передает стриминг ответа GigaChat
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    """Обрабатывает WebSocket соединение и передает стриминг ответа GigaChat."""
+    """
+    WebSocket endpoint для обработки запросов к RAG сервису.
+
+    Принимает следующие параметры через WebSocket:
+    - question: Текст вопроса
+    - role: Роль пользователя
+    - specialization: Специализация пользователя
+    - question_id: ID предопределенного сценария
+    - context: Контекст предыдущего разговора
+    - count: Счетчик взаимодействий
+
+    Args:
+        websocket (WebSocket): WebSocket соединение.
+
+    Note:
+        Функция поддерживает как первичные запросы, так и уточняющие вопросы
+        с учетом контекста предыдущего разговора.
+    """
     await websocket.accept()
     question = await websocket.receive_text()
     role = await websocket.receive_text()
@@ -134,9 +218,9 @@ async def websocket_endpoint(websocket: WebSocket):
     print(count)
     prompt_template = ""
     embedding_retriever = embedding_retriever_full
-    if (question_id == 1):
+    if question_id == 1:
         embedding_retriever = embedding_retriever_1
-        prompt_template = '''
+        prompt_template = """
         Вы исполняете роль $role, а ваша специализация — $specialization.
 
         Промпт:
@@ -159,11 +243,11 @@ async def websocket_endpoint(websocket: WebSocket):
         Контекст: {context}
         Вопрос: {input}
         Ответ:
-        '''
-    elif (question_id == 2):
+        """
+    elif question_id == 2:
         embedding_retriever = embedding_retriever_1
 
-        prompt_template = '''
+        prompt_template = """
         На основе контекста, предоставленного в векторной базе данных, ответь на следующий вопрос:
 
         'Что я могу ожидать от своего лида компетенции?'
@@ -182,11 +266,11 @@ async def websocket_endpoint(websocket: WebSocket):
         Контекст: {context}
         Вопрос: {input}
         Ответ:
-        '''
-    elif (question_id == 3):
+        """
+    elif question_id == 3:
         embedding_retriever = embedding_retriever_1
 
-        prompt_template = '''
+        prompt_template = """
         Вы исполняете роль $role, а ваша специализация — $specialization.
 
         Ты – эксперт по составлению требований и описанию ролей для IT-специалистов.
@@ -215,11 +299,11 @@ async def websocket_endpoint(websocket: WebSocket):
         Контекст: {context}
         Вопрос: {input}
         Ответ:
-        '''
-    elif (question_id == 4):
+        """
+    elif question_id == 4:
         embedding_retriever = embedding_retriever_2
 
-        prompt_template = '''
+        prompt_template = """
         Вы исполняете роль $role, а ваша специализация — $specialization.
 
         Промпт:
@@ -238,10 +322,10 @@ async def websocket_endpoint(websocket: WebSocket):
         Контекст: {context}
         Вопрос: {input}
         Ответ:
-        '''
-    elif (question_id == 5):
+        """
+    elif question_id == 5:
         embedding_retriever = embedding_retriever_2
-        prompt_template = '''
+        prompt_template = """
         Вы исполняете роль $role, а ваша специализация — $specialization.
 
         Промпт:
@@ -259,10 +343,10 @@ async def websocket_endpoint(websocket: WebSocket):
         Контекст: {context}
         Вопрос: {input}
         Ответ:
-        '''
-    elif (question_id == 6):
+        """
+    elif question_id == 6:
         embedding_retriever = embedding_retriever_2
-        prompt_template = '''
+        prompt_template = """
         Вы исполняете роль $role, а ваша специализация — $specialization.
 
         Промпт:
@@ -282,10 +366,10 @@ async def websocket_endpoint(websocket: WebSocket):
         Контекст: {context}
         Вопрос: {input}
         Ответ:
-        '''
-    elif (question_id == 7):
+        """
+    elif question_id == 7:
         embedding_retriever = embedding_retriever_2
-        prompt_template = '''
+        prompt_template = """
         Вы исполняете роль $role, а ваша специализация — $specialization.
 
         Промпт:
@@ -305,10 +389,10 @@ async def websocket_endpoint(websocket: WebSocket):
         Контекст: {context}
         Вопрос: {input}
         Ответ:
-        '''
-    elif (question_id == 8):
+        """
+    elif question_id == 8:
         embedding_retriever = embedding_retriever_2
-        prompt_template = '''
+        prompt_template = """
         Вы исполняете роль $role, а ваша специализация — $specialization.
 
         Промпт:
@@ -327,10 +411,10 @@ async def websocket_endpoint(websocket: WebSocket):
         Контекст: {context}
         Вопрос: {input}
         Ответ:
-        '''
-    elif (question_id == 9):
+        """
+    elif question_id == 9:
         embedding_retriever = embedding_retriever_2
-        prompt_template = '''
+        prompt_template = """
         Основываясь на контексте, доступном в векторной базе данных, дай ответ на вопрос: \
         'Что ожидается от лида компетенции при проведение 1-2-1?' \
         Опиши основные ожидания и роли, которые лидер компетенции по аналитике должен исполнять.
@@ -340,10 +424,10 @@ async def websocket_endpoint(websocket: WebSocket):
         Контекст: {context}
         Вопрос: {input}
         Ответ:
-        '''
-    elif (question_id == 10):
+        """
+    elif question_id == 10:
         embedding_retriever = embedding_retriever_2
-        prompt_template = '''
+        prompt_template = """
         Основываясь на контексте, доступном в векторной базе данных, дай ответ на вопрос: \
         'Что ожидается от лида компетенции при проведение встречи компетенции?' \
         Опиши основные ожидания и роли, которые лидер компетенции по аналитике должен исполнять,\
@@ -354,10 +438,10 @@ async def websocket_endpoint(websocket: WebSocket):
         Контекст: {context}
         Вопрос: {input}
         Ответ:
-        '''
-    elif (question_id == 11):
+        """
+    elif question_id == 11:
         embedding_retriever = embedding_retriever_2
-        prompt_template = '''
+        prompt_template = """
         Основываясь на контексте, доступном в векторной базе данных, дай ответ на вопрос: \
         'Что ожидается от лида компетенции при построение структуры компетенции?' \
         Опиши основные ожидания и роли, которые лидер компетенции по аналитике должен исполнять,\
@@ -368,10 +452,10 @@ async def websocket_endpoint(websocket: WebSocket):
         Контекст: {context}
         Вопрос: {input}
         Ответ:
-        '''
-    elif (question_id == 12):
+        """
+    elif question_id == 12:
         embedding_retriever = embedding_retriever_2
-        prompt_template = '''
+        prompt_template = """
         Основываясь на контексте, доступном в векторной базе данных, дай ответ на вопрос: \
         'Что ожидается от лида компетенции при создании ИПР?' \
         Опиши основные ожидания и роли, которые лидер компетенции по аналитике должен исполнять,\
@@ -382,11 +466,11 @@ async def websocket_endpoint(websocket: WebSocket):
         Контекст: {context}
         Вопрос: {input}
         Ответ:
-        '''
+        """
 
-    elif (question_id == 13):
+    elif question_id == 13:
         embedding_retriever = embedding_retriever_2
-        prompt_template = '''
+        prompt_template = """
         Вы исполняете роль $role, а ваша специализация — $specialization.
 
         Промпт:
@@ -405,11 +489,11 @@ async def websocket_endpoint(websocket: WebSocket):
         Контекст: {context}
         Вопрос: {input}
         Ответ:
-        '''
+        """
 
-    elif (question_id == 14):
+    elif question_id == 14:
         embedding_retriever = embedding_retriever_2
-        prompt_template = '''
+        prompt_template = """
         Основываясь на контексте, доступном в векторной базе данных, дай ответ на вопрос: \
         'Как лид компетенции аналитики должен оптимизировать процессы разработки?' \
         Опиши основные ожидания и роли, которые лидер компетенции по аналитике должен исполнять, \
@@ -420,10 +504,10 @@ async def websocket_endpoint(websocket: WebSocket):
         Контекст: {context}
         Вопрос: {input}
         Ответ:
-        '''
-    elif (question_id == 15):
+        """
+    elif question_id == 15:
         embedding_retriever = embedding_retriever_3
-        prompt_template = '''
+        prompt_template = """
         Ты исполняешь роль product owner.
         Твоя задача — объяснить другому product owner, что он может ожидать от системного аналитика. Ориентируйся на следующие ключевые аспекты:
 
@@ -440,10 +524,10 @@ async def websocket_endpoint(websocket: WebSocket):
         Контекст: {context}
         Вопрос: {input}
         Ответ:
-        '''
-    elif (question_id == 16):
+        """
+    elif question_id == 16:
         embedding_retriever = embedding_retriever_3
-        prompt_template = '''
+        prompt_template = """
         Вы исполняете роль product owner.
         Ваши функции включают:
 
@@ -457,11 +541,11 @@ async def websocket_endpoint(websocket: WebSocket):
         Контекст: {context}
         Вопрос: {input}
         Ответ:
-        '''
-    
-    elif (question_id == 17):
+        """
+
+    elif question_id == 17:
         embedding_retriever = embedding_retriever_3
-        prompt_template = '''
+        prompt_template = """
         Представь себя коучем для Product Owner в команде разработки программного обеспечения.
         Объясни ему основные задачи и роли, которые он должен выполнять.
         Уточни, что от него ожидается на каждом этапе процесса разработки.
@@ -473,13 +557,12 @@ async def websocket_endpoint(websocket: WebSocket):
         Контекст: {context}
         Вопрос: {input}
         Ответ:
-        '''
-    
-    
-    elif(question_id == 777):
+        """
+
+    elif question_id == 777:
         embedding_retriever = embedding_retriever_full
 
-        prompt_template = '''
+        prompt_template = """
         Вы исполняете роль $role, а ваша специализация — $specialization.
         Ваши функции включают:
 
@@ -495,34 +578,39 @@ async def websocket_endpoint(websocket: WebSocket):
         Контекст: {context}
         Вопрос: {input}
         Ответ:
-        '''        
+        """
 
     print(f"📩 Получен запрос: {question}")
 
-    retrieval_chain = create_retrieval_chain_from_folder(role, specialization, prompt_template, embedding_retriever)
+    retrieval_chain = create_retrieval_chain_from_folder(
+        role, specialization, prompt_template, embedding_retriever
+    )
 
     # Задаем массив лишних символов
     unwanted_chars = ["*", "**"]
     # Запускаем стриминг ответа
-    if (count == 1):
-        async for chunk in retrieval_chain.astream({'input': question}):
+    if count == 1:
+        async for chunk in retrieval_chain.astream({"input": question}):
             if chunk:
-                    # Извлекаем ответ
+                # Извлекаем ответ
                 answer = chunk.get("answer", "").strip()
 
-                    # Заменяем ненужные символы
+                # Заменяем ненужные символы
                 for char in unwanted_chars:
                     answer = answer.replace(char, " ")
-                    
+
                 answer = " ".join(answer.split())  # Удаляем лишние пробелы
-                    
-                await websocket.send_text(answer)  # Отправляем очищенный текстовый ответ
+
+                await websocket.send_text(
+                    answer
+                )  # Отправляем очищенный текстовый ответ
 
     else:
-        for chunk in GigaChat(credentials=api_key,
-                              verify_ssl_certs=False,
-                                model='GigaChat'
-                                ).stream(f"Использую контекст нашей прошлой беседы {context}, ответь на уточняющий вопрос {question}"):
+        for chunk in GigaChat(
+            credentials=api_key, verify_ssl_certs=False, model="GigaChat"
+        ).stream(
+            f"Использую контекст нашей прошлой беседы {context}, ответь на уточняющий вопрос {question}"
+        ):
             answer = chunk.content.strip()  # Используем атрибут .content
 
             # Заменяем ненужные символы
@@ -534,10 +622,12 @@ async def websocket_endpoint(websocket: WebSocket):
 
             # Отправляем ответ через WebSocket
             await websocket.send_text(answer)
-    
-    await websocket.close()    
+
+    await websocket.close()
+
 
 if __name__ == "__main__":
     import uvicorn
+
     print("Запускаем сервер на ws://127.0.0.1:8000/ws")
     uvicorn.run(app, host="0.0.0.0", port=8000)
