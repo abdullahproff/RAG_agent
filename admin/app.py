@@ -11,6 +11,14 @@ from database import DatabaseOperations
 from rag_manager import RAGDocumentManager
 
 app = Flask(__name__)
+from werkzeug.middleware.proxy_fix import ProxyFix
+
+app.wsgi_app = ProxyFix(
+    app.wsgi_app,
+    x_proto=1,
+    x_host=1,
+    x_port=1
+)
 app.secret_key = 'your-secret-key-here'  # Замените на реальный секретный ключ
 app.config['SESSION_TYPE'] = 'filesystem'
 app.config['SESSION_PERMANENT'] = False
