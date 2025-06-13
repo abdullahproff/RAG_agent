@@ -82,6 +82,43 @@ def clear_all_cache():
         logger.error(f"Ошибка при очистке кешей: {e}")
         return False
 
+def send_message_to_all_users(message_text):
+    """
+    Функция для отправки сообщения всем пользователям.
+    """
+    try:
+        conn = sqlite3.connect(DATABASE_URL)
+        cursor = conn.cursor()
+        
+        # Получаем всех пользователей
+        cursor.execute("SELECT user_id FROM Users")
+        users = cursor.fetchall()
+        conn.close()
+        
+        success_count = 0
+        fail_count = 0
+        
+        # Отправляем сообщение каждому пользователю
+        for user in users:
+            try:
+                bot.send_message(user[0], message_text)
+                success_count += 1
+            except Exception as e:
+                logger.error(f"Ошибка при отправке сообщения пользователю {user[0]}: {e}")
+                fail_count += 1
+        
+        logger.info(f"Отправка сообщений завершена. Успешно: {success_count}, Ошибок: {fail_count}")
+        return {
+            'success': True,
+            'message': f'Сообщение отправлено {success_count} пользователям. Ошибок: {fail_count}'
+        }
+    except Exception as e:
+        logger.error(f"Ошибка при отправке сообщений всем пользователям: {e}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
 # Токен Telegram-бота
 bot = telebot.TeleBot(secret_key)
 # Словарь для хранения данных пользователя
@@ -1791,6 +1828,32 @@ class CacheAPIHandler(BaseHTTPRequestHandler):
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             self.wfile.write(json.dumps(response, ensure_ascii=False).encode('utf-8'))
+        elif self.path == '/send-message':
+            try:
+                content_length = int(self.headers['Content-Length'])
+                post_data = self.rfile.read(content_length)
+                data = json.loads(post_data.decode('utf-8'))
+                message_text = data.get('message')
+                
+                if not message_text:
+                    response = {'success': False, 'error': 'Текст сообщения не указан'}
+                    self.send_response(400)
+                else:
+                    result = send_message_to_all_users(message_text)
+                    response = result
+                    self.send_response(200 if result['success'] else 500)
+                
+                self.send_header('Content-type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps(response, ensure_ascii=False).encode('utf-8'))
+            except Exception as e:
+                response = {'success': False, 'error': str(e)}
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps(response, ensure_ascii=False).encode('utf-8'))
         else:
             self.send_response(404)
             self.end_headers()

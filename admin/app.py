@@ -277,5 +277,37 @@ def clear_cache():
     except Exception as e:
         return jsonify({'success': False, 'error': f'Ошибка при очистке кеша: {str(e)}'})
 
+@app.route('/system/send-message', methods=['POST'])
+@login_required
+def send_message():
+    try:
+        data = request.get_json()
+        message = data.get('message')
+        
+        if not message:
+            return jsonify({'success': False, 'error': 'Текст сообщения не указан'})
+        
+        # Делаем HTTP запрос к API бота
+        response = requests.post(
+            'http://localhost:8007/send-message',
+            json={'message': message},
+            timeout=30  # Увеличиваем таймаут, так как отправка может занять время
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('success'):
+                return jsonify({'success': True, 'message': data.get('message', 'Сообщение успешно отправлено')})
+            else:
+                return jsonify({'success': False, 'error': data.get('error', 'Неизвестная ошибка')})
+        else:
+            return jsonify({'success': False, 'error': f'HTTP ошибка: {response.status_code}'})
+    except requests.exceptions.ConnectionError:
+        return jsonify({'success': False, 'error': 'Не удается подключиться к боту. Убедитесь, что бот запущен.'})
+    except requests.exceptions.Timeout:
+        return jsonify({'success': False, 'error': 'Превышено время ожидания ответа от бота.'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'Ошибка при отправке сообщения: {str(e)}'})
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=8002) 
