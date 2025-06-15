@@ -125,6 +125,8 @@ bot = telebot.TeleBot(secret_key)
 user_data = {}
 suggested_questions_storage = {}
 
+# Тестовый обработчик убран - основные обработчики теперь должны работать
+
 def init_db():
     # Подключаемся к базе данных (или создаем ее, если она не существует)
     conn = sqlite3.connect(DATABASE_URL)
@@ -1547,33 +1549,166 @@ def handle_predefined_question(call):
 
 @require_onboarding
 @bot.callback_query_handler(func=lambda call: call.data == "question_777")
-def hadl_print_in_development(call):
-    markup = types.InlineKeyboardMarkup(row_width=1)
-    question = types.InlineKeyboardButton(text="В начало", callback_data="start")
-    markup.add(question)
-    bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="Мы активно работаем над этой функцией, ждите в ближайшем будующем!\nВаша команда разработки <3", reply_markup=markup)
-
+def handle_message_history(call):
+    chat_id = call.message.chat.id
+    
+    try:
+        # Получаем последние 10 сообщений из базы данных
+        conn = sqlite3.connect(DATABASE_URL)
+        cursor = conn.cursor()
+        
+        query = '''
+        SELECT role, message, time 
+        FROM Message_history
+        WHERE user_id = ?
+        ORDER BY time DESC
+        LIMIT 10
+        '''
+        
+        cursor.execute(query, (chat_id,))
+        messages = cursor.fetchall()
+        conn.close()
+        
+        if not messages:
+            # Если истории нет
+            markup = types.InlineKeyboardMarkup(row_width=1)
+            back_button = types.InlineKeyboardButton(text="◀️ Назад в меню", callback_data="personal_account")
+            markup.add(back_button)
+            
+            bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=call.message.message_id,
+                text="📭 История сообщений пуста\n\nВы еще не задавали вопросы боту.",
+                reply_markup=markup
+            )
+            return
+        
+        # Формируем красивое отображение истории
+        history_text = "📚 **История ваших сообщений**\n"
+        history_text += f"Показаны последние {len(messages)} сообщений:\n\n"
+        
+        # Переворачиваем список, чтобы показать от старых к новым
+        messages = list(reversed(messages))
+        
+        for i, (role, message, timestamp) in enumerate(messages, 1):
+            # Форматируем время (убираем секунды для краткости)
+            try:
+                from datetime import datetime
+                dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                formatted_time = dt.strftime("%d.%m %H:%M")
+            except:
+                formatted_time = timestamp[:16]  # Fallback
+            
+            # Определяем эмодзи и префикс в зависимости от роли
+            if role == "user":
+                emoji = "👤"
+                prefix = "Вы"
+            else:
+                emoji = "🤖"
+                prefix = "Бот"
+            
+            # Обрезаем длинные сообщения
+            display_message = message
+            if len(message) > 150:
+                display_message = message[:147] + "..."
+            
+            history_text += f"{emoji} **{prefix}** ({formatted_time}):\n"
+            history_text += f"{display_message}\n\n"
+        
+        # Добавляем кнопки навигации
+        markup = types.InlineKeyboardMarkup(row_width=2)
+        
+        # Кнопка "Показать больше" (если есть еще сообщения)
+        cursor = conn = sqlite3.connect(DATABASE_URL)
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM Message_history WHERE user_id = ?", (chat_id,))
+        total_count = cursor.fetchone()[0]
+        conn.close()
+        
+        buttons = []
+        print(f"!!! СОЗДАНИЕ КНОПОК: total_count = {total_count} !!!")
+        if total_count > 10:
+            print("!!! ДОБАВЛЯЕМ КНОПКУ 'Показать все' !!!")
+            buttons.append(types.InlineKeyboardButton(text="📄 Показать все", callback_data="history_full"))
+        
+        print("!!! ДОБАВЛЯЕМ КНОПКУ 'Очистить историю' !!!")
+        buttons.append(types.InlineKeyboardButton(text="🗑 Очистить историю", callback_data="history_clear"))
+        buttons.append(types.InlineKeyboardButton(text="◀️ Назад в меню", callback_data="personal_account"))
+        
+        print(f"!!! ВСЕГО КНОПОК СОЗДАНО: {len(buttons)} !!!")
+        for i, btn in enumerate(buttons):
+            print(f"!!! КНОПКА {i}: text='{btn.text}', callback_data='{btn.callback_data}' !!!")
+        
+        # Добавляем кнопки по 2 в ряд, последнюю отдельно
+        if len(buttons) >= 2:
+            markup.add(buttons[0], buttons[1])
+            if len(buttons) > 2:
+                markup.add(buttons[2])
+        else:
+            markup.add(*buttons)
+        
+        # Отправляем сообщение с историей
+        bot.edit_message_text(
+            chat_id=chat_id,
+            message_id=call.message.message_id,
+            text=history_text,
+            reply_markup=markup,
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logger.error(f"Ошибка при получении истории сообщений для пользователя {chat_id}: {e}")
+        
+        # В случае ошибки показываем сообщение об ошибке
+        markup = types.InlineKeyboardMarkup(row_width=1)
+        back_button = types.InlineKeyboardButton(text="◀️ Назад в меню", callback_data="personal_account")
+        markup.add(back_button)
+        
+        bot.edit_message_text(
+            chat_id=chat_id,
+            message_id=call.message.message_id,
+            text="❌ Произошла ошибка при загрузке истории сообщений.\n\nПопробуйте позже.",
+            reply_markup=markup
+        )
 @require_onboarding
 @bot.callback_query_handler(func=lambda call: call.data == "question_custom")
 def ask_custom_question(call):
     chat_id = call.message.chat.id
-    clear_dialog_context(chat_id)
+    # НЕ очищаем контекст для сохранения памяти диалога
     bot.send_message(call.message.chat.id, "Введите ваш вопрос:")
     bot.register_next_step_handler(call.message, process_custom_question)
 
 
+@require_onboarding
 def process_custom_question(message):   
-    if message.chat.id not in user_data:
-        user_data[message.chat.id] = {"role": "Специалист", "specialization": "Аналитик"}
+    """
+    Обрабатывает кастомные вопросы, введенные после нажатия кнопки 'Ввести свой вопрос'
+    Эта функция вызывается через register_next_step_handler
+    """
+    logger.info(f"Обрабатываем кастомный вопрос от пользователя {message.chat.id}")
+    
+    # Получаем роль и специализацию из базы данных
+    conn = sqlite3.connect(DATABASE_URL)
+    cursor = conn.cursor()
+    cursor.execute("SELECT Role, Specialization FROM Users WHERE user_id = ?", (message.chat.id,))
+    user_info = cursor.fetchone()
+    conn.close()
+    
+    if user_info:
+        role = user_info[0]
+        specialization = user_info[1]
+    else:
+        # Fallback к старой логике
+        if message.chat.id not in user_data:
+            user_data[message.chat.id] = {"role": "Специалист", "specialization": "Аналитик"}
+        role = user_data[message.chat.id]['role']
+        specialization = user_data[message.chat.id]['specialization']
+        if(not specialization):
+            specialization = "Аналитик"
 
-    role = user_data[message.chat.id]['role']
-    specialization = user_data[message.chat.id]['specialization']
-    if(not specialization):
-        specialization = "Аналитик"
-
-    question_id = 777
+    question_id = 888  # Используем ID=888 для кастомных вопросов с памятью диалога
     question = message.text
-    asyncio.run(websocket_question_from_user(question, message, role, specialization, question_id))
+    asyncio.run(websocket_question_from_user(question, message, role, specialization, question_id, show_suggested_questions=True))
 
 async def handling_cached_requests(question_id, message, question, specialization):
     print("Кешированное сообщение")
@@ -1625,98 +1760,168 @@ async def handling_cached_requests(question_id, message, question, specializatio
     markup.add(*button)
     bot.send_message(chat_id=message_2.chat.id, text = "Пожалуйста, выберите дальнейшее действие", reply_markup=markup)
 
+
     #mplusk2
-async def websocket_question_from_user(question, message, role, specialization, question_id):
-    print(question)
+async def websocket_question_from_user(question, message, role, specialization, question_id, show_suggested_questions=True):
+    print(f"websocket_question_from_user: question='{question}', question_id={question_id}")
     wanted_simbols = [".", ":"]
 
     chat_id = message.chat.id
-    print(chat_id)
+    print(f"websocket_question_from_user: chat_id={chat_id}")
+    
+    logger.info(f"websocket_question_from_user вызвана для пользователя {chat_id}, question_id={question_id}")
+    
     if chat_id not in dialogue_context:
         dialogue_context[chat_id] = []
+        logger.info(f"Инициализирован новый dialogue_context для пользователя {chat_id}")
+    else:
+        logger.info(f"Используем существующий dialogue_context для пользователя {chat_id}, размер: {len(dialogue_context[chat_id])}")
+    
+    # Добавляем новый вопрос пользователя в контекст
     dialogue_context[chat_id].append({"role": "user", "content": question})
     save_message_in_db(chat_id, "user", question)
+    
+    # Ограничиваем контекст до последних 6 пар сообщений (12 сообщений всего: 6 user + 6 assistant)
+    if len(dialogue_context[chat_id]) > 12:
+        dialogue_context[chat_id] = dialogue_context[chat_id][-12:]
+    
     context_str = json.dumps(dialogue_context[chat_id], ensure_ascii=False, indent=4)
     if chat_id not in count_questions_users:
         count_questions_users[chat_id] = 0
     count_questions_users[chat_id] += 1
 
-    async with websockets.connect(WEBSOCKET_URL) as websocket:
-        await websocket.send(question) # Отправляем вопрос
-        await websocket.send(role)
-        await websocket.send(specialization)
-        await websocket.send(str(question_id))
-        await websocket.send(context_str)
-        await websocket.send(str(count_questions_users[chat_id]))
+    try:
+        logger.info(f"Подключаемся к RAG сервису: {WEBSOCKET_URL}")
+        async with websockets.connect(WEBSOCKET_URL) as websocket:
+            logger.info(f"Отправляем данные в RAG сервис: question_id={question_id}")
+            await websocket.send(question) # Отправляем вопрос
+            await websocket.send(role)
+            await websocket.send(specialization)
+            await websocket.send(str(question_id))
+            await websocket.send(context_str)
+            await websocket.send(str(count_questions_users[chat_id]))
+            logger.info(f"Данные отправлены, ожидаем ответ от RAG сервиса")
 
-        try:
-            message_2 = bot.send_message(message.chat.id, "Ожидайте ответа...")
-            full_answer = ""
-            last_send_time = time.time()
-            answer_for_cache = []
-            answer_for_countinue_dialog = ""
-            while True:
-                answer_part = await websocket.recv()  # Получаем ответ частями
-                if answer_part:
-                    for char in answer_part:
-                        if (char in wanted_simbols):
-                            answer_part += "\n"
+            try:
+                message_2 = bot.send_message(message.chat.id, "Ожидайте ответа...")
+                full_answer = ""
+                last_send_time = time.time()
+                answer_for_cache = []
+                answer_for_countinue_dialog = ""
+                empty_message_count = 0
+                max_empty_messages = 10  # Максимум пустых сообщений подряд
+                
+                while True:
+                    try:
+                        # Добавляем таймаут для recv
+                        answer_part = await asyncio.wait_for(websocket.recv(), timeout=30.0)
+                    except asyncio.TimeoutError:
+                        logger.warning(f"Таймаут ожидания ответа от RAG сервиса для пользователя {chat_id}")
+                        break
+                    if answer_part:
+                        empty_message_count = 0  # Сбрасываем счетчик пустых сообщений
+                        for char in answer_part:
+                            if (char in wanted_simbols):
+                                answer_part += "\n"
 
-                    full_answer += answer_part
-                    if time.time() - last_send_time >= 1:
-                        try:
-                            message_2 = bot.send_message(chat_id=message_2.chat.id, text=full_answer, parse_mode="Markdown")
-                            answer_for_cache.append(full_answer)
-                            answer_for_countinue_dialog += full_answer
-                            full_answer = ""
-                            last_send_time = time.time()
-                        except telebot.apihelper.ApiTelegramException as e:
-                            if e.error_code == 429:
-                                retry_after = int(e.result.headers.get('Retry-After', 1))
-                                print(f"Rate limit exceeded. Retrying after {retry_after} seconds...")
-                                time.sleep(retry_after)
+                        full_answer += answer_part
+                        if time.time() - last_send_time >= 1:
+                            try:
                                 message_2 = bot.send_message(chat_id=message_2.chat.id, text=full_answer, parse_mode="Markdown")
-                                answer_for_countinue_dialog += full_answer
                                 answer_for_cache.append(full_answer)
-                                last_send_time = time.time()
+                                answer_for_countinue_dialog += full_answer
                                 full_answer = ""
-                else:
-                    print("Получено пустое сообщение от WebSocket.")
+                                last_send_time = time.time()
+                            except telebot.apihelper.ApiTelegramException as e:
+                                if e.error_code == 429:
+                                    retry_after = int(e.result.headers.get('Retry-After', 1))
+                                    print(f"Rate limit exceeded. Retrying after {retry_after} seconds...")
+                                    time.sleep(retry_after)
+                                    message_2 = bot.send_message(chat_id=message_2.chat.id, text=full_answer, parse_mode="Markdown")
+                                    answer_for_countinue_dialog += full_answer
+                                    answer_for_cache.append(full_answer)
+                                    last_send_time = time.time()
+                                    full_answer = ""
+                    else:
+                        # Пустое сообщение может означать конец потока
+                        empty_message_count += 1
+                        logger.debug(f"Получено пустое сообщение #{empty_message_count} от WebSocket для пользователя {chat_id}")
+                        
+                        # Если получили слишком много пустых сообщений подряд - выходим
+                        if empty_message_count >= max_empty_messages:
+                            logger.info(f"Получено {empty_message_count} пустых сообщений подряд, завершаем обработку для пользователя {chat_id}")
+                            break
+                            
+                        # Основная защита - счетчик пустых сообщений выше
+                            
+                        # Если не закрыто, делаем небольшую паузу и продолжаем
+                        await asyncio.sleep(0.1)
+                        continue
+                
+            except websockets.exceptions.ConnectionClosed:
+                logger.info(f"WebSocket соединение закрыто для пользователя {chat_id}")
+                if (full_answer != ""):
+                    message_2 = bot.send_message(chat_id=message_2.chat.id, text=full_answer)
+                    answer_for_cache.append(full_answer)
+                    answer_for_countinue_dialog += full_answer
+                print("")
+                # Кэшируем ответы только для предопределенных вопросов (не для 777 и 888)
+                if(question_id not in [777, 888]):
+                    if(question_id not in [1, 2, 3, 4, 5, 18, 19, 20]):
+                        cache_dict[question_id] = answer_for_cache
+                    else:
+                        if question_id not in cache_by_specialization:
+                            cache_by_specialization[question_id] = {}
+                        cache_by_specialization[question_id][specialization] = answer_for_cache
+                
+            dialogue_context[chat_id].append({"role": "assistant", "content": answer_for_countinue_dialog})
+            save_message_in_db(chat_id, "assistant", answer_for_countinue_dialog)
             
-        except websockets.exceptions.ConnectionClosed:
-            if (full_answer != ""):
-                message_2 = bot.send_message(chat_id=message_2.chat.id, text=full_answer)
-                answer_for_cache.append(full_answer)
-                answer_for_countinue_dialog += full_answer
-            print("")
-            if(question_id != 777):
-                if(question_id not in [1, 2, 3, 4, 5, 18, 19, 20]):
-                    cache_dict[question_id] = answer_for_cache
-                else:
-                    if question_id not in cache_by_specialization:
-                        cache_by_specialization[question_id] = {}
-                    cache_by_specialization[question_id][specialization] = answer_for_cache
-            
-        dialogue_context[chat_id].append({"role": "assistant", "content": answer_for_countinue_dialog})
-        save_message_in_db(chat_id, "assistant", answer_for_countinue_dialog)
-        markup = types.InlineKeyboardMarkup()
-        if(count_questions_users[chat_id] < 3):
-            button = [types.InlineKeyboardButton(text="Ввести свой вопрос", callback_data="question_custom"),
+            # Снова ограничиваем контекст после добавления ответа ассистента
+            if len(dialogue_context[chat_id]) > 12:
+                dialogue_context[chat_id] = dialogue_context[chat_id][-12:]
+                
+            # Для свободного ввода (ID=888) показываем кнопку "Уточнить" и генерируем предложенные вопросы
+            if question_id == 888:
+                markup = types.InlineKeyboardMarkup()
+                button = [
+                    types.InlineKeyboardButton(text="Уточнить", callback_data="question_custom"),
                     types.InlineKeyboardButton(text="В начало", callback_data="start")
                 ]
-        else:
-            button = [types.InlineKeyboardButton(text="В начало", callback_data="start")]
+                markup.add(*button)
+            else:
+                # Для других типов вопросов показываем стандартные кнопки
+                markup = types.InlineKeyboardMarkup()
+                if(count_questions_users[chat_id] < 3):
+                    button = [types.InlineKeyboardButton(text="Уточнить", callback_data="question_custom"),
+                            types.InlineKeyboardButton(text="В начало", callback_data="start")
+                        ]
+                else:
+                    button = [types.InlineKeyboardButton(text="В начало", callback_data="start")]
+                markup.add(*button)
+            #mplusk1
+            truncated_answer = (answer_for_countinue_dialog[:2000] + '...') if len(answer_for_countinue_dialog) > 2000 else answer_for_countinue_dialog
 
-        markup.add(*button)
-        #mplusk1
-        truncated_answer = (answer_for_countinue_dialog[:2000] + '...') if len(answer_for_countinue_dialog) > 2000 else answer_for_countinue_dialog
+            # Запускаем генерацию подсказанных вопросов для всех типов вопросов (включая ID=888)
+            if show_suggested_questions:
+                await generate_and_show_suggested_questions(chat_id, question, truncated_answer, role, specialization)
 
-        # Запускаем генерацию подсказанных вопросов
-        await generate_and_show_suggested_questions(chat_id, question, truncated_answer, role, specialization)
+            # Разные сообщения для разных типов вопросов
+            if question_id == 888:
+                bot.send_message(chat_id=message_2.chat.id, text = "💬 Вы можете продолжить диалог, просто написав следующий вопрос", reply_markup=markup)
+            else:
+                bot.send_message(chat_id=message_2.chat.id, text = "Выберите дальнейшее действие", reply_markup=markup)
+            
+            logger.info(f"websocket_question_from_user завершена для пользователя {chat_id}")
 
-        bot.send_message(chat_id=message_2.chat.id, text = "Выберите дальнейшее действие", reply_markup=markup)
+    except Exception as e:
+        logger.error(f"Ошибка в websocket_question_from_user для пользователя {chat_id}: {e}")
+        bot.send_message(chat_id, f"❌ Произошла ошибка при обработке вопроса: {str(e)}")
+        # Все равно создаем кнопку "В начало" для возврата
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton(text="В начало", callback_data="start"))
+        bot.send_message(chat_id, "Попробуйте позже или вернитесь в начало", reply_markup=markup)
 
-        #mplusk2
 current_timezone = time.tzname
 print(f"Текущий часовой пояс: {current_timezone}")     
 current_timenow = datetime.now(moscow_tz).strftime("%H:%M")
@@ -1936,8 +2141,9 @@ def handle_suggested_question(call):
         
         bot.send_message(chat_id, f"Вы выбрали вопрос: {question}")
         
-        # Отправляем вопрос на обработку
-        asyncio.run(websocket_question_from_user(question, call.message, role, specialization, 777))
+        # Отправляем вопрос на обработку (с предложенными вопросами)
+        # ID=777 для выбранных предложенных вопросов
+        asyncio.run(websocket_question_from_user(question, call.message, role, specialization, 777, show_suggested_questions=True))
         
         # Удаляем предложенные вопросы после выбора
         if chat_id in suggested_questions_storage:
@@ -1948,9 +2154,261 @@ def handle_suggested_question(call):
     else:
         bot.answer_callback_query(call.id, "Не удалось найти вопрос. Пожалуйста, попробуйте снова.")
 
-#mplusk2
-# Запускаем API сервер в отдельном потоке
-api_thread = threading.Thread(target=start_cache_api_server, daemon=True)
-api_thread.start()
+def get_dialog_history_context(chat_id):
+    """
+    Получает последние 6 сообщений из базы данных и формирует контекст диалога
+    Возвращает сообщения в хронологическом порядке (от старых к новым)
+    """
+    try:
+        conn = sqlite3.connect(DATABASE_URL) 
+        cursor = conn.cursor()
 
-bot.polling(none_stop=False)
+        # Запрос для получения последних 6 сообщений
+        query = '''
+        SELECT role, message, time 
+        FROM Message_history
+        WHERE user_id = ?
+        ORDER BY time DESC
+        LIMIT 6
+        '''
+
+        cursor.execute(query, (chat_id,))
+        messages = cursor.fetchall()
+        conn.close()
+        
+        logger.info(f"Получено {len(messages)} сообщений из БД для пользователя {chat_id}")
+        
+        # Переворачиваем список, чтобы сообщения шли в хронологическом порядке
+        messages = list(reversed(messages))
+        
+        # Формируем контекст диалога
+        dialog_context = []
+        for role, message, time in messages:
+            dialog_context.append({"role": role, "content": message})
+            logger.debug(f"Добавлено в контекст: {role}: {message[:50]}...")
+        
+        logger.info(f"Сформирован контекст диалога: {len(dialog_context)} сообщений")
+        return dialog_context
+        
+    except Exception as e:
+        logger.error(f"Ошибка при получении истории диалога для пользователя {chat_id}: {e}")
+        return []
+
+#mplusk2
+# Универсальный обработчик для всех текстовых сообщений
+@require_onboarding
+@bot.message_handler(func=lambda message: True, content_types=['text'])
+def handle_text_message(message):
+    """
+    Обрабатывает любое текстовое сообщение как вопрос к RAG системе с учетом истории диалога
+    Этот обработчик имеет самый низкий приоритет и срабатывает только если нет других активных обработчиков
+    """
+    chat_id = message.chat.id
+    question = message.text.strip()
+    
+    # Игнорируем команды (они уже обработаны другими хендлерами)
+    if question.startswith('/'):
+        return
+    
+    # Проверяем, есть ли активный step handler для этого пользователя
+    try:
+        if hasattr(bot, 'next_step_backend') and bot.next_step_backend.handlers.get(chat_id):
+            logger.info(f"Пропускаем обработку - есть активный step handler для пользователя {chat_id}")
+            return
+    except Exception as e:
+        logger.warning(f"Ошибка при проверке step handlers: {e}")
+    
+    logger.info(f"Начинаем обработку свободного текста для пользователя {chat_id}: '{question}'")
+    
+    # Получаем роль и специализацию пользователя из базы данных
+    conn = sqlite3.connect(DATABASE_URL)
+    cursor = conn.cursor()
+    cursor.execute("SELECT Role, Specialization FROM Users WHERE user_id = ?", (chat_id,))
+    user_info = cursor.fetchone()
+    conn.close()
+    
+    if user_info:
+        role = user_info[0]
+        specialization = user_info[1]
+    else:
+        # Если пользователь не найден в БД, используем значения по умолчанию
+        role = "Пользователь"
+        specialization = "Не указана"
+    
+    # Для свободного ввода (ID=888) всегда загружаем свежий контекст из БД (последние 6 сообщений)
+    logger.info(f"Загружаем свежий контекст диалога из БД для пользователя {chat_id}")
+    history_context = get_dialog_history_context(chat_id)
+    dialogue_context[chat_id] = history_context.copy()  # Перезаписываем контекст
+    logger.info(f"Загружена история диалога для пользователя {chat_id}: {len(history_context)} сообщений")
+    
+    logger.info(f"Обрабатываем свободный вопрос от пользователя {chat_id}: {question[:50]}...")
+    
+    # Отправляем подтверждение получения вопроса
+    bot.send_message(chat_id, f"🤖 Обрабатываю ваш вопрос: {question}")
+    
+    # Отправляем вопрос на обработку в RAG систему (с предложенными вопросами)
+    question_id = 888  # ID для свободного ввода текста (отдельный промпт)
+    asyncio.run(websocket_question_from_user(question, message, role, specialization, question_id, show_suggested_questions=True))
+
+# Обработчик для показа полной истории сообщений
+@require_onboarding
+@bot.callback_query_handler(func=lambda call: call.data == "history_full")
+def handle_full_history(call):
+    print("!!! HISTORY_FULL HANDLER CALLED !!!")
+    chat_id = call.message.chat.id
+    logger.info(f"Обработчик history_full вызван для пользователя {chat_id}")
+    print(f"!!! chat_id: {chat_id}, call.data: {call.data} !!!")
+    
+    try:
+        # Получаем ВСЕ сообщения из базы данных
+        conn = sqlite3.connect(DATABASE_URL)
+        cursor = conn.cursor()
+        
+        query = '''
+        SELECT role, message, time 
+        FROM Message_history
+        WHERE user_id = ?
+        ORDER BY time DESC
+        LIMIT 50
+        '''
+        
+        cursor.execute(query, (chat_id,))
+        messages = cursor.fetchall()
+        conn.close()
+        
+        if not messages:
+            bot.answer_callback_query(call.id, "История сообщений пуста")
+            return
+        
+        # Формируем полную историю (более компактно)
+        history_text = f"📚 **Полная история сообщений**\n"
+        history_text += f"Показано {len(messages)} последних сообщений:\n\n"
+        
+        # Переворачиваем список, чтобы показать от старых к новым
+        messages = list(reversed(messages))
+        
+        for i, (role, message, timestamp) in enumerate(messages, 1):
+            # Форматируем время
+            try:
+                from datetime import datetime
+                dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                formatted_time = dt.strftime("%d.%m %H:%M")
+            except:
+                formatted_time = timestamp[:16]
+            
+            # Определяем эмодзи
+            emoji = "👤" if role == "user" else "🤖"
+            
+            # Обрезаем сообщения для компактности
+            display_message = message
+            if len(message) > 100:
+                display_message = message[:97] + "..."
+            
+            history_text += f"{emoji} {formatted_time}: {display_message}\n\n"
+        
+        # Проверяем длину сообщения (Telegram ограничивает 4096 символов)
+        if len(history_text) > 4000:
+            history_text = history_text[:3900] + "\n\n... (история обрезана из-за ограничений Telegram)"
+        
+        # Кнопки навигации
+        markup = types.InlineKeyboardMarkup(row_width=2)
+        buttons = [
+            types.InlineKeyboardButton(text="🗑 Очистить историю", callback_data="history_clear"),
+            types.InlineKeyboardButton(text="◀️ Назад", callback_data="question_777")
+        ]
+        markup.add(*buttons)
+        
+        bot.edit_message_text(
+            chat_id=chat_id,
+            message_id=call.message.message_id,
+            text=history_text,
+            reply_markup=markup,
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logger.error(f"Ошибка при получении полной истории для пользователя {chat_id}: {e}")
+        bot.answer_callback_query(call.id, "Ошибка при загрузке истории")
+
+# Обработчик для очистки истории сообщений
+@require_onboarding
+@bot.callback_query_handler(func=lambda call: call.data == "history_clear")
+def handle_clear_history(call):
+    print("!!! HISTORY_CLEAR HANDLER CALLED !!!")
+    chat_id = call.message.chat.id
+    logger.info(f"Обработчик history_clear вызван для пользователя {chat_id}")
+    print(f"!!! chat_id: {chat_id}, call.data: {call.data} !!!")
+    
+    # Показываем подтверждение
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    buttons = [
+        types.InlineKeyboardButton(text="✅ Да, очистить", callback_data="history_clear_confirm"),
+        types.InlineKeyboardButton(text="❌ Отмена", callback_data="question_777")
+    ]
+    markup.add(*buttons)
+    
+    bot.edit_message_text(
+        chat_id=chat_id,
+        message_id=call.message.message_id,
+        text="⚠️ **Подтверждение очистки истории**\n\nВы уверены, что хотите удалить всю историю сообщений?\n\n*Это действие нельзя отменить.*",
+        reply_markup=markup,
+        parse_mode='Markdown'
+    )
+
+# Обработчик подтверждения очистки истории
+# Убираем тестовый обработчик отсюда - переносим в начало файла
+
+@require_onboarding
+@bot.callback_query_handler(func=lambda call: call.data == "history_clear_confirm")
+def handle_clear_history_confirm(call):
+    chat_id = call.message.chat.id
+    
+    try:
+        # Удаляем всю историю пользователя
+        conn = sqlite3.connect(DATABASE_URL)
+        cursor = conn.cursor()
+        
+        cursor.execute("DELETE FROM Message_history WHERE user_id = ?", (chat_id,))
+        deleted_count = cursor.rowcount
+        conn.commit()
+        conn.close()
+        
+        # Очищаем также контекст диалога в памяти
+        clear_dialog_context(chat_id)
+        
+        # Показываем результат
+        markup = types.InlineKeyboardMarkup(row_width=1)
+        back_button = types.InlineKeyboardButton(text="◀️ Назад в меню", callback_data="personal_account")
+        markup.add(back_button)
+        
+        bot.edit_message_text(
+            chat_id=chat_id,
+            message_id=call.message.message_id,
+            text=f"✅ **История очищена**\n\nУдалено {deleted_count} сообщений.\n\nВаша история сообщений теперь пуста.",
+            reply_markup=markup,
+            parse_mode='Markdown'
+        )
+        
+        logger.info(f"Пользователь {chat_id} очистил историю сообщений ({deleted_count} записей)")
+        
+    except Exception as e:
+        logger.error(f"Ошибка при очистке истории для пользователя {chat_id}: {e}")
+        
+        markup = types.InlineKeyboardMarkup(row_width=1)
+        back_button = types.InlineKeyboardButton(text="◀️ Назад", callback_data="question_777")
+        markup.add(back_button)
+        
+        bot.edit_message_text(
+            chat_id=chat_id,
+            message_id=call.message.message_id,
+            text="❌ **Ошибка при очистке истории**\n\nПопробуйте позже или обратитесь к администратору.",
+            reply_markup=markup,
+            parse_mode='Markdown'
+        )
+
+if __name__ == "__main__":
+    # Запускаем API сервер в отдельном потоке
+    api_thread = threading.Thread(target=start_cache_api_server, daemon=True)
+    api_thread.start()
+    
+    bot.polling(none_stop=False)
