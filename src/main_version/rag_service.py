@@ -105,7 +105,7 @@ def create_retrieval_chain_from_folder(role, specialization, question_id, embedd
 
     llm = GigaChat(
         credentials=api_key,
-        model='GigaChat-Max',
+        model='GigaChat',
         verify_ssl_certs=False,
         profanity_check=False
     )
@@ -163,6 +163,20 @@ async def websocket_suggest_endpoint(websocket: WebSocket):
         role=role,
         specialization=specialization
     )
+
+    # Добавляем инструкции по генерации релевантных вопросов
+    question_generation_guidance = f"""
+Учитывая, что пользователь имеет роль '{role}' и специализацию '{specialization}',
+сгенерируйте 3-5 релевантных вопросов, которые:
+1. Соответствуют текущему контексту диалога
+2. Учитывают специфику роли и специализации пользователя
+3. Помогают углубить понимание обсуждаемой темы
+4. Могут быть полезны для профессионального развития в рамках специализации
+5. Не выходят за рамки компетенций пользователя
+
+Формат ответа: каждый вопрос с новой строки, без нумерации.
+"""
+    filled_prompt += question_generation_guidance
 
     llm = GigaChat(
         credentials=api_key,
@@ -223,15 +237,74 @@ async def websocket_endpoint(websocket: WebSocket):
     elif question_id in [21]:
         embedding_retriever = embedding_retriever_full
 
-    retrieval_chain = create_retrieval_chain_from_folder(
-        role=role,
-        specialization=specialization,
-        question_id=question_id,
-        embedding_retriever=embedding_retriever,
-        prompt_template=prompt_template
-    )
+    # Создаем retrieval_chain только для вопросов, которые его используют (НЕ для ID=888)
+    retrieval_chain = None
+    if question_id != 888:
+        retrieval_chain = create_retrieval_chain_from_folder(
+            role=role,
+            specialization=specialization,
+            question_id=question_id,
+            embedding_retriever=embedding_retriever,
+            prompt_template=prompt_template
+        )
+    
     unwanted_chars = ["*", "**"]
-    if (count == 1):
+    
+    # Специальная обработка для свободного ввода с ID=888
+    if question_id == 888:
+        # Используем GigaChat напрямую с промптом и контекстом
+        print(f"Обрабатываем свободный вопрос (ID=888) с контекстом: {context[:100]}...")
+        
+        # Формируем промпт с контекстом
+        template = string.Template(prompt_template)
+        filled_prompt = template.substitute(
+            role=role,
+            specialization=specialization
+        )
+        
+        # Добавляем контекст диалога если есть
+        if context and context != "[]":
+            context_info = f"\n\nКонтекст предыдущих сообщений:\n{context}\n\n"
+            full_prompt = filled_prompt + context_info + f"Вопрос пользователя: {question}"
+        else:
+            full_prompt = filled_prompt + f"\n\nВопрос пользователя: {question}"
+        
+        print("\n--- PROMPT ДЛЯ LLM ---\n")
+        print(full_prompt)
+        print("\n--- КОНЕЦ PROMPT ---\n")
+        
+        try:
+            print("Начинаем стриминг ответа от GigaChat...")
+            chunk_count = 0
+            # Используем GigaChat для ответа
+            async for chunk in GigaChat(
+                credentials=api_key,
+                verify_ssl_certs=False,
+                model='GigaChat'
+            ).astream(full_prompt):
+                if chunk and chunk.content:
+                    chunk_count += 1
+                    answer = chunk.content.strip()
+                    
+                    # Заменяем ненужные символы
+                    for char in unwanted_chars:
+                        answer = answer.replace(char, " ")
+                        
+                    answer = " ".join(answer.split())  # Удаляем лишние пробелы
+                    
+                    print(f"Отправляем chunk #{chunk_count}: {answer[:50]}...")
+                    await websocket.send_text(answer)
+            
+            print(f"Стриминг завершен. Всего отправлено chunks: {chunk_count}")
+            if chunk_count == 0:
+                print("ВНИМАНИЕ: GigaChat не вернул ни одного chunk!")
+                await websocket.send_text("Извините, не удалось получить ответ. Попробуйте переформулировать вопрос.")
+                
+        except Exception as e:
+            print(f"ОШИБКА при работе с GigaChat для ID=888: {e}")
+            await websocket.send_text(f"Произошла ошибка при обработке вопроса: {str(e)}")
+    
+    elif (count == 1):
         async for chunk in retrieval_chain.astream({'input': question}):
             if chunk:
                     # Извлекаем ответ
