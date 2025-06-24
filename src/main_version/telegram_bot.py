@@ -1003,7 +1003,7 @@ async def check_for_daily_msg():
             logger.debug(f"Текущий день недели: {current_day}, время: {current_time}")
             
             # Проверяем, пятница ли сейчас (4) и время 19:00
-            if current_day == 0 and current_time == "19:40":
+            if current_day == 4 and current_time == "19:00":
                 logger.info("Наступило время для отправки еженедельных сообщений")
                 conn = sqlite3.connect(DATABASE_URL)
                 conn.row_factory = sqlite3.Row
