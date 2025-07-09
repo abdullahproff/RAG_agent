@@ -1,0 +1,397 @@
+{% extends "base.html" %}
+
+{% block title %}Управление вопросами{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-2">Управление вопросами</h1>
+            <p class="text-muted">Управление вопросами телеграм-бота, их тегами и настройками векторного поиска</p>
+        </div>
+        <div>
+            <button type="button" class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#questionModal">
+                <i class="bi bi-plus-circle"></i> Добавить вопрос
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="window.location.reload()">
+                <i class="bi bi-arrow-clockwise"></i> Обновить кеш
+            </button>
+        </div>
+    </div>
+
+    <!-- Фильтры -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Записей на странице</label>
+                    <select name="per_page" class="form-select" onchange="this.form.submit()">
+                        <option value="20" {% if per_page == 20 %}selected{% endif %}>20</option>
+                        <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+                        <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Тег</label>
+                    <select name="category" class="form-select" onchange="this.form.submit()">
+                        <option value="">Все теги</option>
+                        {% for cat in categories %}
+                        <option value="{{ cat.category }}" {% if current_category == cat.category %}selected{% endif %}>
+                            {{ cat.category }} ({{ cat.count }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Таблица вопросов -->
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                                                <th>ID</th>
+                    <th>Текст вопроса</th>
+                    <th>Тег</th>
+                    <th>Роль</th>
+                    <th>Специализация</th>
+                    <th>Векторное хранилище</th>
+                    <th>Промпт</th>
+                    <th>Активен</th>
+                    <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for question in questions %}
+                        <tr>
+                            <td><small>{{ question.question_id }}</small></td>
+                            <td>
+                                <div class="fw-bold">{{ question.question_text }}</div>
+                                <small class="text-muted">callback: {{ question.callback_data }}</small>
+                            </td>
+                            <td>
+                                {% if question.category %}
+                                    <span class="badge bg-secondary">{{ question.category }}</span>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ question.role or '-' }}</td>
+                            <td>{{ question.specialization or '-' }}</td>
+                            <td>
+                                {% if question.vector_store_display %}
+                                    <span class="badge bg-info">{{ question.vector_store_display }}</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ question.vector_store }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if question.prompt_id %}
+                                    <span class="badge bg-success" title="Промпт ID: {{ question.prompt_id }}">
+                                        <i class="bi bi-check-circle"></i> Есть
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-warning">
+                                        <i class="bi bi-exclamation-triangle"></i> Нет
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if question.is_active %}
+                                    <span class="badge bg-success">Да</span>
+                                {% else %}
+                                    <span class="badge bg-danger">Нет</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary" onclick="editQuestion('{{ question.callback_data }}')">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteQuestion('{{ question.callback_data }}')">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Пагинация -->
+            {% if total_pages > 1 %}
+            <nav aria-label="Навигация по страницам">
+                <ul class="pagination justify-content-center">
+                    <li class="page-item {% if page == 1 %}disabled{% endif %}">
+                        <a class="page-link" href="?page={{ page - 1 }}&per_page={{ per_page }}{% if current_category %}&category={{ current_category }}{% endif %}">
+                            Предыдущая
+                        </a>
+                    </li>
+                    
+                    {% for p in range(1, total_pages + 1) %}
+                        {% if p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
+                            <li class="page-item {% if p == page %}active{% endif %}">
+                                <a class="page-link" href="?page={{ p }}&per_page={{ per_page }}{% if current_category %}&category={{ current_category }}{% endif %}">
+                                    {{ p }}
+                                </a>
+                            </li>
+                        {% elif p == page - 3 or p == page + 3 %}
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    <li class="page-item {% if page == total_pages %}disabled{% endif %}">
+                        <a class="page-link" href="?page={{ page + 1 }}&per_page={{ per_page }}{% if current_category %}&category={{ current_category }}{% endif %}">
+                            Следующая
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно для добавления/редактирования -->
+<div class="modal fade" id="questionModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitle">Добавить вопрос</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="questionForm">
+                    <input type="hidden" id="originalCallbackData">
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Callback Data*</label>
+                            <input type="text" class="form-control" id="callbackData" required>
+                            <small class="form-text text-muted">Уникальный идентификатор для кнопки</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Question ID*</label>
+                            <input type="number" class="form-control" id="questionId" required>
+                            <small class="form-text text-muted">Числовой ID вопроса</small>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Текст вопроса*</label>
+                        <input type="text" class="form-control" id="questionText" required>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Тег</label>
+                            <input type="text" class="form-control" id="category" list="categoryList" placeholder="коммуникация, развитие, продуктивность, термины">
+                            <datalist id="categoryList">
+                                <option value="коммуникация">
+                                <option value="развитие">
+                                <option value="продуктивность">
+                                <option value="термины">
+                                {% for cat in categories %}
+                                    <option value="{{ cat.category }}">
+                                {% endfor %}
+                            </datalist>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Роль</label>
+                            <select class="form-select" id="role">
+                                <option value="">Любая</option>
+                                <option value="PO/PM">PO/PM</option>
+                                <option value="Лид компетенции">Лид компетенции</option>
+                                <option value="Специалист">Специалист</option>
+                                <option value="Стажер">Стажер</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Специализация</label>
+                            <select class="form-select" id="specialization">
+                                <option value="">Любая</option>
+                                <option value="Аналитик">Аналитик</option>
+                                <option value="Тестировщик">Тестировщик</option>
+                                <option value="WEB">WEB</option>
+                                <option value="Java">Java</option>
+                                <option value="Python">Python</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Векторное хранилище</label>
+                            <select class="form-select" id="vectorStore">
+                                {% for vs in vector_stores %}
+                                    <option value="{{ vs.name }}">{{ vs.display_name }}</option>
+                                {% endfor %}
+                            </select>
+                            <small class="form-text text-muted">Выберите векторное хранилище для поиска ответов</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Промпт</label>
+                            <select class="form-select" id="promptId">
+                                <option value="">Без промпта</option>
+                                {% for prompt in prompts %}
+                                    <option value="{{ prompt.question_id }}">
+                                        ID {{ prompt.question_id }}: {{ prompt.question_text[:50] }}...
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Позиция в списке</label>
+                            <input type="number" class="form-control" id="orderPosition" step="10">
+                            <small class="form-text text-muted">Порядок отображения в меню</small>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check mt-4">
+                                <input class="form-check-input" type="checkbox" id="isActive" checked>
+                                <label class="form-check-label" for="isActive">
+                                    Вопрос активен
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="saveQuestion()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Дожидаемся полной загрузки DOM
+document.addEventListener('DOMContentLoaded', function() {
+    // Инициализируем модальное окно после загрузки DOM
+    window.questionModal = new bootstrap.Modal(document.getElementById('questionModal'));
+});
+
+function showAddModal() {
+    document.getElementById('modalTitle').textContent = 'Добавить вопрос';
+    document.getElementById('questionForm').reset();
+    document.getElementById('originalCallbackData').value = '';
+    document.getElementById('isActive').checked = true;
+    window.questionModal.show();
+}
+
+function editQuestion(callbackData) {
+    fetch(`/questions/${encodeURIComponent(callbackData)}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                alert('Ошибка: ' + data.error);
+                return;
+            }
+            
+            document.getElementById('modalTitle').textContent = 'Редактировать вопрос';
+            document.getElementById('originalCallbackData').value = callbackData;
+            document.getElementById('callbackData').value = data.callback_data;
+            document.getElementById('questionId').value = data.question_id;
+            document.getElementById('questionText').value = data.question_text;
+            document.getElementById('category').value = data.category || '';
+            document.getElementById('role').value = data.role || '';
+            document.getElementById('specialization').value = data.specialization || '';
+            document.getElementById('vectorStore').value = data.vector_store || 'auto';
+            document.getElementById('promptId').value = data.prompt_id || '';
+            document.getElementById('orderPosition').value = data.order_position || '';
+            document.getElementById('isActive').checked = data.is_active;
+            
+            window.questionModal.show();
+        })
+        .catch(error => {
+            alert('Ошибка при загрузке вопроса: ' + error);
+        });
+}
+
+function saveQuestion() {
+    const originalCallbackData = document.getElementById('originalCallbackData').value;
+    const isEdit = !!originalCallbackData;
+    
+    const data = {
+        callback_data: document.getElementById('callbackData').value,
+        question_id: document.getElementById('questionId').value,
+        question_text: document.getElementById('questionText').value,
+        category: document.getElementById('category').value || null,
+        role: document.getElementById('role').value || null,
+        specialization: document.getElementById('specialization').value || null,
+        vector_store: document.getElementById('vectorStore').value,
+        prompt_id: document.getElementById('promptId').value || null,
+        order_position: document.getElementById('orderPosition').value || null,
+        is_active: document.getElementById('isActive').checked
+    };
+    
+    const url = isEdit ? `/questions/${encodeURIComponent(originalCallbackData)}` : '/questions/add';
+    const method = isEdit ? 'PUT' : 'POST';
+    
+    fetch(url, {
+        method: method,
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            window.questionModal.hide();
+            location.reload();
+        } else {
+            alert('Ошибка: ' + result.error);
+        }
+    })
+    .catch(error => {
+        alert('Ошибка при сохранении: ' + error);
+    });
+}
+
+function deleteQuestion(callbackData) {
+    if (!confirm('Вы уверены, что хотите удалить этот вопрос?')) {
+        return;
+    }
+    
+    fetch(`/questions/${encodeURIComponent(callbackData)}`, {
+        method: 'DELETE'
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            location.reload();
+        } else {
+            alert('Ошибка при удалении: ' + result.error);
+        }
+    })
+    .catch(error => {
+        alert('Ошибка при удалении: ' + error);
+    });
+}
+
+function reloadQuestionsCache() {
+    if (!confirm('Перезагрузить кеш вопросов в телеграм-боте?')) {
+        return;
+    }
+    
+    fetch('/questions/reload-cache', {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            alert('Кеш вопросов успешно перезагружен');
+        } else {
+            alert('Ошибка: ' + result.error);
+        }
+    })
+    .catch(error => {
+        alert('Ошибка при перезагрузке кеша: ' + error);
+    });
+}
+</script>
+{% endblock %} 

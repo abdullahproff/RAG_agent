@@ -1,0 +1,42 @@
+# Виртуальные окружения Python
+venv/
+env/
+ENV/
+.venv/
+.env/
+
+# Python кэш и временные файлы
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Логи
+*.log
+
+# Переменные окружения
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Базы данных (если нужно)
+# *.db
+# *.sqlite
+# *.sqlite3

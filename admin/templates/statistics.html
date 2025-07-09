@@ -1,0 +1,308 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Статистика бота</h2>
+    <div class="d-flex align-items-center">
+        <label for="periodSelect" class="form-label me-2">Период:</label>
+        <select class="form-select" id="periodSelect" style="width: auto;" onchange="changePeriod()">
+            <option value="7" {% if period_days == 7 %}selected{% endif %}>7 дней</option>
+            <option value="30" {% if period_days == 30 %}selected{% endif %}>30 дней</option>
+            <option value="90" {% if period_days == 90 %}selected{% endif %}>3 месяца</option>
+            <option value="180" {% if period_days == 180 %}selected{% endif %}>6 месяцев</option>
+            <option value="365" {% if period_days == 365 %}selected{% endif %}>1 год</option>
+        </select>
+    </div>
+</div>
+
+<!-- Общие метрики -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">{{ total_users }}</h4>
+                        <p class="card-text">Всего пользователей</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-people-fill fs-1"></i>
+                    </div>
+                </div>
+                <small>+{{ new_users }} за {{ period_days }} дн.</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">{{ total_messages }}</h4>
+                        <p class="card-text">Всего сообщений</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-chat-dots-fill fs-1"></i>
+                    </div>
+                </div>
+                <small>{{ active_users }} активных за {{ period_days }} дн.</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">{{ total_reminders }}</h4>
+                        <p class="card-text">Всего напоминаний</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-alarm-fill fs-1"></i>
+                    </div>
+                </div>
+                <small>Система уведомлений</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title">{{ active_users }}</h4>
+                        <p class="card-text">Активные пользователи</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-person-check-fill fs-1"></i>
+                    </div>
+                </div>
+                <small>За {{ period_days }} дней</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Графики -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title">Регистрации пользователей</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="registrationsChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title">Активность пользователей</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="messagesChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Круговые диаграммы -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title">Распределение по специализациям</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="specializationsChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title">Распределение по ролям</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="rolesChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Топ активных пользователей -->
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title">Топ активных пользователей за {{ period_days }} дн.</h5>
+            </div>
+            <div class="card-body">
+                {% if top_users %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>ID</th>
+                                <th>Username</th>
+                                <th>Полное имя</th>
+                                <th>Сообщений</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user in top_users %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td>{{ user.user_id }}</td>
+                                <td>{{ user.username }}</td>
+                                <td>{{ user.user_fullname }}</td>
+                                <td>
+                                    <span class="badge bg-primary">{{ user.message_count }}</span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted">Нет данных за выбранный период</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Данные для графиков
+const registrationsData = {{ registrations_by_day | tojson }};
+const messagesData = {{ messages_by_day | tojson }};
+const specializationsData = {{ specializations | tojson }};
+const rolesData = {{ roles | tojson }};
+
+function changePeriod() {
+    const days = document.getElementById('periodSelect').value;
+    window.location.href = '{{ url_for("statistics") }}?days=' + days;
+}
+
+// График регистраций
+const regCtx = document.getElementById('registrationsChart').getContext('2d');
+new Chart(regCtx, {
+    type: 'line',
+    data: {
+        labels: registrationsData.map(item => item.date),
+        datasets: [{
+            label: 'Регистрации',
+            data: registrationsData.map(item => item.count),
+            borderColor: 'rgb(54, 162, 235)',
+            backgroundColor: 'rgba(54, 162, 235, 0.1)',
+            tension: 0.1,
+            fill: true
+        }]
+    },
+    options: {
+        responsive: true,
+        scales: {
+            y: {
+                beginAtZero: true
+            }
+        },
+        plugins: {
+            legend: {
+                display: false
+            }
+        }
+    }
+});
+
+// График сообщений
+const msgCtx = document.getElementById('messagesChart').getContext('2d');
+new Chart(msgCtx, {
+    type: 'bar',
+    data: {
+        labels: messagesData.map(item => item.date),
+        datasets: [{
+            label: 'Сообщения',
+            data: messagesData.map(item => item.count),
+            backgroundColor: 'rgba(75, 192, 192, 0.6)',
+            borderColor: 'rgba(75, 192, 192, 1)',
+            borderWidth: 1
+        }]
+    },
+    options: {
+        responsive: true,
+        scales: {
+            y: {
+                beginAtZero: true
+            }
+        },
+        plugins: {
+            legend: {
+                display: false
+            }
+        }
+    }
+});
+
+// График специализаций
+if (specializationsData.length > 0) {
+    const specCtx = document.getElementById('specializationsChart').getContext('2d');
+    new Chart(specCtx, {
+        type: 'doughnut',
+        data: {
+            labels: specializationsData.map(item => item.name),
+            datasets: [{
+                data: specializationsData.map(item => item.count),
+                backgroundColor: [
+                    '#FF6384',
+                    '#36A2EB',
+                    '#FFCE56',
+                    '#4BC0C0',
+                    '#9966FF',
+                    '#FF9F40'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'right'
+                }
+            }
+        }
+    });
+}
+
+// График ролей
+if (rolesData.length > 0) {
+    const rolesCtx = document.getElementById('rolesChart').getContext('2d');
+    new Chart(rolesCtx, {
+        type: 'pie',
+        data: {
+            labels: rolesData.map(item => item.name),
+            datasets: [{
+                data: rolesData.map(item => item.count),
+                backgroundColor: [
+                    '#FF6384',
+                    '#36A2EB',
+                    '#FFCE56',
+                    '#4BC0C0',
+                    '#9966FF'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'right'
+                }
+            }
+        }
+    });
+}
+</script>
+{% endblock %} 

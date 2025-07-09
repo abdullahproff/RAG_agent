@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, shrink-to-fit=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="RAG Ментор">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="format-detection" content="telephone=no, email=no, address=no">
+    <meta name="theme-color" content="#4CAF50">
+    <title>RAG Ментор</title>
+    
+    <!-- Telegram WebApp Script -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    
+    <!-- Telegram UI Kit -->
+    <script src="https://unpkg.com/@telegram-apps/telegram-ui@latest/dist/telegram-ui.umd.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/@telegram-apps/telegram-ui@latest/dist/styles.css">
+    
+    <style>
+        /* Базовые стили для совместимости */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            background-color: var(--tg-theme-bg-color, #ffffff);
+            color: var(--tg-theme-text-color, #000000);
+            overflow-x: hidden;
+        }
+        
+        .app-container {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .screen {
+            display: none;
+            flex: 1;
+            padding: 16px;
+        }
+        
+        .screen.active {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header-section {
+            margin-bottom: 24px;
+        }
+        
+        .content-section {
+            flex: 1;
+        }
+        
+        .menu-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+        }
+        
+        @media (min-width: 480px) {
+            .menu-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        .menu-card {
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+        
+        .menu-card:active {
+            transform: scale(0.98);
+        }
+        
+        .menu-icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+        
+        .question-form {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        
+        .answer-container {
+            margin-top: 24px;
+        }
+        
+        .answer-text {
+            font-size: 16px;
+            line-height: 1.7;
+            text-align: justify;
+            hyphens: auto;
+            word-break: break-word;
+        }
+        
+        .answer-text h1 {
+            font-size: 22px;
+            font-weight: 700;
+            margin: 24px 0 16px 0;
+            border-bottom: 2px solid var(--tg-theme-accent-text-color, var(--tg-theme-link-color));
+            padding-bottom: 8px;
+        }
+        
+        .answer-text h2 {
+            font-size: 20px;
+            font-weight: 600;
+            margin: 20px 0 12px 0;
+            color: var(--tg-theme-accent-text-color, var(--tg-theme-link-color));
+        }
+        
+        .answer-text h3 {
+            font-size: 18px;
+            font-weight: 600;
+            margin: 18px 0 10px 0;
+            color: var(--tg-theme-section-header-text-color, var(--tg-theme-subtitle-text-color));
+        }
+        
+        .answer-text strong {
+            font-weight: 600;
+            color: var(--tg-theme-text-color);
+        }
+        
+        .answer-text em {
+            font-style: italic;
+            color: var(--tg-theme-subtitle-text-color);
+        }
+        
+        .answer-text code {
+            background: var(--tg-theme-section-bg-color);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+            font-size: 14px;
+            border: 1px solid var(--tg-theme-section-separator-color);
+        }
+        
+        .answer-text ul {
+            list-style-type: none;
+            padding-left: 0;
+        }
+        
+        .answer-text ul li {
+            position: relative;
+            padding-left: 24px;
+            margin-bottom: 8px;
+        }
+        
+        .answer-text ul li::before {
+            content: "•";
+            color: var(--tg-theme-accent-text-color, var(--tg-theme-link-color));
+            font-weight: bold;
+            position: absolute;
+            left: 8px;
+            font-size: 18px;
+            line-height: 1.2;
+        }
+        
+        .answer-text ol {
+            counter-reset: item;
+            padding-left: 0;
+        }
+        
+        .answer-text ol li {
+            display: block;
+            position: relative;
+            padding-left: 32px;
+            margin-bottom: 8px;
+            counter-increment: item;
+        }
+        
+        .answer-text ol li::before {
+            content: counter(item) ".";
+            color: var(--tg-theme-accent-text-color, var(--tg-theme-link-color));
+            font-weight: 600;
+            position: absolute;
+            left: 8px;
+            background: var(--tg-theme-section-bg-color);
+            padding: 2px 6px;
+            border-radius: 50%;
+            min-width: 20px;
+            text-align: center;
+            font-size: 14px;
+            line-height: 1.2;
+        }
+        
+        .answer-text blockquote {
+            border-left: 4px solid var(--tg-theme-accent-text-color, var(--tg-theme-link-color));
+            margin: 16px 0;
+            padding: 12px 16px;
+            background: var(--tg-theme-section-bg-color);
+            border-radius: 0 8px 8px 0;
+            font-style: italic;
+        }
+        
+        .answer-text p:last-child {
+            margin-bottom: 0;
+        }
+        
+        .asked-question-container {
+            margin-top: 24px;
+        }
+        
+        .asked-question-section h3 {
+            margin-bottom: 8px;
+        }
+        
+        .suggested-questions, .previous-questions {
+            margin-top: 24px;
+        }
+        
+        .suggested-list, .previous-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 12px;
+        }
+        
+        /* Стили для новых карточек вопросов */
+        .suggested-question-card:hover,
+        .previous-question-card:hover {
+            border-color: var(--tg-theme-link-color);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        .suggested-question-card:active,
+        .previous-question-card:active {
+            transform: scale(0.98);
+        }
+        
+        /* Анимация появления карточек */
+        .suggested-question-card,
+        .previous-question-card {
+            animation: fadeInUp 0.3s ease-out;
+        }
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+        
+        /* Spinner стили */
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--tg-theme-hint-color);
+            border-top: 2px solid var(--tg-theme-button-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Анимация конфетти */
+        @keyframes confetti-fall {
+            0% {
+                transform: translateY(-100px) rotate(0deg);
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(100px) rotate(360deg);
+                opacity: 0;
+            }
+        }
+        
+        /* Ripple анимация для кнопки назад */
+        @keyframes ripple {
+            0% {
+                transform: scale(0);
+                opacity: 0.1;
+            }
+            100% {
+                transform: scale(4);
+                opacity: 0;
+            }
+        }
+        
+        /* Анимация встряхивания */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-2px); }
+            20%, 40%, 60%, 80% { transform: translateX(2px); }
+        }
+        
+        /* Анимации для улучшения UX */
+        .answer-container {
+            animation: fadeInUp 0.5s ease-out;
+        }
+        
+        .answer-text {
+            animation: typeIn 0.8s ease-out;
+        }
+        
+        @keyframes typeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .answer-text h1, .answer-text h2, .answer-text h3 {
+            animation: slideInLeft 0.6s ease-out;
+        }
+        
+        @keyframes slideInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        /* Специальные стили для заголовков Markdown */
+        .answer-text .markdown-header {
+            animation: slideInLeft 0.6s ease-out;
+            transition: color 0.3s ease;
+        }
+        
+        .answer-text .markdown-header:hover {
+            color: var(--tg-theme-accent-text-color, var(--tg-theme-link-color));
+        }
+        
+        .answer-text ul li, .answer-text ol li {
+            animation: fadeInUp 0.4s ease-out;
+            animation-fill-mode: both;
+        }
+        
+        .answer-text ul li:nth-child(1) { animation-delay: 0.1s; }
+        .answer-text ul li:nth-child(2) { animation-delay: 0.2s; }
+        .answer-text ul li:nth-child(3) { animation-delay: 0.3s; }
+        .answer-text ul li:nth-child(4) { animation-delay: 0.4s; }
+        .answer-text ul li:nth-child(5) { animation-delay: 0.5s; }
+        
+        .answer-text ol li:nth-child(1) { animation-delay: 0.1s; }
+        .answer-text ol li:nth-child(2) { animation-delay: 0.2s; }
+        .answer-text ol li:nth-child(3) { animation-delay: 0.3s; }
+        .answer-text ol li:nth-child(4) { animation-delay: 0.4s; }
+        .answer-text ol li:nth-child(5) { animation-delay: 0.5s; }
+        
+        /* Hover эффекты */
+        .answer-text code:hover {
+            background: var(--tg-theme-link-color);
+            color: var(--tg-theme-button-text-color);
+            transition: all 0.2s ease;
+        }
+        
+        .answer-text blockquote:hover {
+            border-left-width: 6px;
+            transition: border-left-width 0.2s ease;
+        }
+        
+        /* Стили для Markdown заголовков */
+        .markdown-h1 {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #2c3e50;
+            margin: 20px 0 15px 0;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #3498db;
+            animation: slideInLeft 0.5s ease-out;
+        }
+
+        .markdown-h2 {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #34495e;
+            margin: 18px 0 12px 0;
+            padding-left: 10px;
+            border-left: 4px solid #3498db;
+            background: linear-gradient(90deg, rgba(52, 152, 219, 0.1) 0%, transparent 100%);
+            animation: slideInLeft 0.5s ease-out 0.1s both;
+        }
+
+        .markdown-h3 {
+            font-size: 1.3em;
+            font-weight: 600;
+            color: #2c3e50;
+            margin: 15px 0 10px 0;
+            padding-left: 15px;
+            position: relative;
+            animation: slideInLeft 0.5s ease-out 0.2s both;
+        }
+
+        .markdown-h3:before {
+            content: "▶";
+            position: absolute;
+            left: 0;
+            color: #3498db;
+            font-size: 0.8em;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        /* Hover эффекты для заголовков */
+        .markdown-h1:hover,
+        .markdown-h2:hover,
+        .markdown-h3:hover {
+            transform: translateX(5px);
+            transition: transform 0.3s ease;
+        }
+
+        /* Стили для списков */
+        .markdown-list {
+            margin: 10px 0 15px 20px;
+            padding-left: 0;
+        }
+
+        .markdown-list li {
+            margin: 8px 0;
+            line-height: 1.6;
+            position: relative;
+        }
+
+        .markdown-list ul li:before {
+            content: "•";
+            color: #3498db;
+            font-weight: bold;
+            position: absolute;
+            left: -15px;
+        }
+
+        /* Стили для параграфов */
+        .markdown-paragraph {
+            margin: 12px 0;
+            line-height: 1.7;
+            text-align: justify;
+        }
+
+        /* Анимация появления */
+        @keyframes slideInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .slide-in {
+            animation: slideInLeft 0.5s ease-out;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container" id="app">
+        <!-- Главное меню -->
+        <div id="main-menu" class="screen active">
+            <div class="header-section">
+                <div style="text-align: center; margin-bottom: 24px;">
+                    <h1 style="font-size: 28px; font-weight: 600; margin-bottom: 8px; color: var(--tg-theme-text-color);">
+                        🤖 GigaMentor
+                    </h1>
+                    <p style="color: var(--tg-theme-hint-color); font-size: 16px;">
+                        Ваш AI-помощник для профессионального развития
+                    </p>
+                </div>
+            </div>
+            
+            <div class="content-section">
+                <div class="menu-grid" id="menu-grid">
+                    <!-- Меню будет создано через JavaScript -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Экран задать вопрос -->
+        <div id="ask-question" class="screen">
+            <div class="header-section">
+                <div id="question-header"></div>
+            </div>
+            
+            <div class="content-section">
+                <div class="question-form" id="question-form-container">
+                    <!-- Форма будет создана через JavaScript -->
+                </div>
+                
+                <!-- Блок с заданным вопросом -->
+                <div id="asked-question-container" class="asked-question-container hidden">
+                    <div class="asked-question-section">
+                        <h3 style="color: var(--tg-theme-text-color);">Ваш вопрос:</h3>
+                        <div id="asked-question-text" class="asked-question-text" style="color: var(--tg-theme-text-color); background: var(--tg-theme-secondary-bg-color); padding: 12px; border-radius: 8px; margin-top: 8px;"></div>
+                    </div>
+                </div>
+                
+                <div id="answer-container" class="answer-container hidden">
+                    <!-- Контейнер для динамического ответа -->
+                    <div id="answer-content"></div>
+
+                    <!-- Связанные вопросы (показываются ниже ответа) -->
+                    <div id="suggested-questions" class="suggested-questions hidden">
+                        <h4 style="color: var(--tg-theme-text-color); margin-bottom: 12px;">💡 Вам может быть интересно:</h4>
+                        <div id="suggested-list" class="suggested-list"></div>
+                    </div>
+                    
+                    <!-- Предыдущие вопросы из истории -->
+                    <div id="previous-questions" class="previous-questions hidden">
+                        <h4 style="color: var(--tg-theme-text-color); margin-bottom: 12px;">📜 Предыдущие вопросы:</h4>
+                        <div id="previous-list" class="previous-list"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Экран библиотеки вопросов -->
+        <div id="questions-library" class="screen">
+            <div class="header-section">
+                <div id="library-header"></div>
+            </div>
+            
+            <div class="content-section">
+                <div id="questions-list">
+                    <!-- Список вопросов будет загружен динамически -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Экран истории -->
+        <div id="history" class="screen">
+            <div class="header-section">
+                <div id="history-header"></div>
+            </div>
+            
+            <div class="content-section">
+                <div id="history-list">
+                    <!-- История будет загружена динамически -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Экран профиля -->
+        <div id="profile" class="screen">
+            <div class="header-section">
+                <div id="profile-header"></div>
+            </div>
+            
+            <div class="content-section">
+                <div id="profile-content">
+                    <!-- Профиль будет создан через JavaScript -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Экран обратной связи -->
+        <div id="feedback" class="screen">
+            <div class="header-section">
+                <div id="feedback-header"></div>
+            </div>
+            
+            <div class="content-section">
+                <div id="feedback-content">
+                    <!-- Форма обратной связи будет создана через JavaScript -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html> 

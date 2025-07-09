@@ -1,0 +1,275 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Пользователи бота</h2>
+    <div class="d-flex align-items-center">
+        <label for="perPageSelect" class="form-label me-2">Показать:</label>
+        <select class="form-select" id="perPageSelect" style="width: auto;" onchange="changePerPage()">
+            <option value="5" {% if per_page == 5 %}selected{% endif %}>5</option>
+            <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
+            <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
+            <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+        </select>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <p class="mb-0">
+                    Показано {{ users|length }} из {{ total }} пользователей 
+                    (страница {{ page }} из {{ total_pages }})
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>
+                    <a href="javascript:void(0)" onclick="sortBy('user_id')" class="text-decoration-none">
+                        ID 
+                        {% if sort_by == 'user_id' %}
+                            <i class="bi bi-arrow-{{ 'up' if sort_order == 'asc' else 'down' }}"></i>
+                        {% endif %}
+                    </a>
+                </th>
+                <th>
+                    <a href="javascript:void(0)" onclick="sortBy('username')" class="text-decoration-none">
+                        Имя пользователя
+                        {% if sort_by == 'username' %}
+                            <i class="bi bi-arrow-{{ 'up' if sort_order == 'asc' else 'down' }}"></i>
+                        {% endif %}
+                    </a>
+                </th>
+                <th>
+                    <a href="javascript:void(0)" onclick="sortBy('user_fullname')" class="text-decoration-none">
+                        Полное имя
+                        {% if sort_by == 'user_fullname' %}
+                            <i class="bi bi-arrow-{{ 'up' if sort_order == 'asc' else 'down' }}"></i>
+                        {% endif %}
+                    </a>
+                </th>
+                <th>
+                    <a href="javascript:void(0)" onclick="sortBy('create_time')" class="text-decoration-none">
+                        Дата регистрации
+                        {% if sort_by == 'create_time' %}
+                            <i class="bi bi-arrow-{{ 'up' if sort_order == 'asc' else 'down' }}"></i>
+                        {% endif %}
+                    </a>
+                </th>
+                <th>
+                    <a href="javascript:void(0)" onclick="sortBy('last_activity')" class="text-decoration-none">
+                        Последняя активность
+                        {% if sort_by == 'last_activity' %}
+                            <i class="bi bi-arrow-{{ 'up' if sort_order == 'asc' else 'down' }}"></i>
+                        {% endif %}
+                    </a>
+                </th>
+                <th>
+                    <a href="javascript:void(0)" onclick="sortBy('message_count')" class="text-decoration-none">
+                        Сообщений
+                        {% if sort_by == 'message_count' %}
+                            <i class="bi bi-arrow-{{ 'up' if sort_order == 'asc' else 'down' }}"></i>
+                        {% endif %}
+                    </a>
+                </th>
+                <th>
+                    <a href="javascript:void(0)" onclick="sortBy('reminders_count')" class="text-decoration-none">
+                        Напоминаний
+                        {% if sort_by == 'reminders_count' %}
+                            <i class="bi bi-arrow-{{ 'up' if sort_order == 'asc' else 'down' }}"></i>
+                        {% endif %}
+                    </a>
+                </th>
+                <th>Действия</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user in users %}
+            <tr>
+                <td>{{ user.user_id }}</td>
+                <td>{{ user.username or 'Не указано' }}</td>
+                <td>{{ user.user_fullname or 'Не указано' }}</td>
+                <td>{{ user.create_time|datetime or 'Не указано' }}</td>
+                <td>{{ user.last_activity|datetime if user.last_activity else 'Нет активности' }}</td>
+                <td>{{ user.message_count or 0 }}</td>
+                <td>{{ user.reminders_count or 0 }}</td>
+                <td>
+                    <button type="button" class="btn btn-sm btn-info" 
+                            onclick="showUserDetails({{ user.user_id }})">
+                        Подробнее
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Пагинация -->
+{% if total_pages > 1 %}
+<nav aria-label="Навигация по страницам">
+    <ul class="pagination justify-content-center">
+        <!-- Первая страница -->
+        {% if page > 1 %}
+        <li class="page-item">
+            <a class="page-link" href="javascript:void(0)" onclick="goToPage(1)">Первая</a>
+        </li>
+        <li class="page-item">
+            <a class="page-link" href="javascript:void(0)" onclick="goToPage({{ page - 1 }})">Предыдущая</a>
+        </li>
+        {% endif %}
+
+        <!-- Номера страниц -->
+        {% for p in range([1, page - 2]|max, [total_pages + 1, page + 3]|min) %}
+        <li class="page-item {% if p == page %}active{% endif %}">
+            <a class="page-link" href="javascript:void(0)" onclick="goToPage({{ p }})">{{ p }}</a>
+        </li>
+        {% endfor %}
+
+        <!-- Следующая страница -->
+        {% if page < total_pages %}
+        <li class="page-item">
+            <a class="page-link" href="javascript:void(0)" onclick="goToPage({{ page + 1 }})">Следующая</a>
+        </li>
+        <li class="page-item">
+            <a class="page-link" href="javascript:void(0)" onclick="goToPage({{ total_pages }})">Последняя</a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+<!-- Модальное окно для деталей пользователя -->
+<div class="modal fade" id="userDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Детали пользователя</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <ul class="nav nav-tabs" id="userTabs" role="tablist">
+                    <li class="nav-item">
+                        <a class="nav-link active" id="messages-tab" data-bs-toggle="tab" href="#messages" role="tab">
+                            Сообщения
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="reminders-tab" data-bs-toggle="tab" href="#reminders" role="tab">
+                            Напоминания
+                        </a>
+                    </li>
+                </ul>
+                <div class="tab-content mt-3" id="userTabContent">
+                    <div class="tab-pane fade show active" id="messages" role="tabpanel">
+                        <div id="userMessages"></div>
+                    </div>
+                    <div class="tab-pane fade" id="reminders" role="tabpanel">
+                        <div id="userReminders"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Текущие параметры
+let currentPage = {{ page }};
+let currentPerPage = {{ per_page }};
+let currentSortBy = '{{ sort_by }}';
+let currentSortOrder = '{{ sort_order }}';
+
+function updateURL() {
+    const params = new URLSearchParams();
+    params.set('page', currentPage);
+    params.set('per_page', currentPerPage);
+    params.set('sort_by', currentSortBy);
+    params.set('sort_order', currentSortOrder);
+    
+    window.location.href = '{{ url_for("users") }}?' + params.toString();
+}
+
+function goToPage(page) {
+    currentPage = page;
+    updateURL();
+}
+
+function changePerPage() {
+    currentPerPage = document.getElementById('perPageSelect').value;
+    currentPage = 1; // Сбрасываем на первую страницу
+    updateURL();
+}
+
+function sortBy(column) {
+    if (currentSortBy === column) {
+        // Меняем направление сортировки
+        currentSortOrder = currentSortOrder === 'asc' ? 'desc' : 'asc';
+    } else {
+        // Новая колонка, сортируем по убыванию
+        currentSortBy = column;
+        currentSortOrder = 'desc';
+    }
+    currentPage = 1; // Сбрасываем на первую страницу
+    updateURL();
+}
+
+function formatDate(dateStr) {
+    if (!dateStr) return 'Не указано';
+    try {
+        const date = new Date(dateStr);
+        return date.toLocaleString();
+    } catch (e) {
+        return dateStr;
+    }
+}
+
+function showUserDetails(userId) {
+    fetch(`/users/${userId}`)
+        .then(response => response.json())
+        .then(data => {
+            // Отображаем сообщения
+            const messagesHtml = data.messages.map(msg => `
+                <div class="card mb-2">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <small class="text-muted">${formatDate(msg.time)}</small>
+                            <span class="badge ${msg.role === 'user' ? 'bg-primary' : 'bg-success'}">${msg.role}</span>
+                        </div>
+                        <p class="mb-0 mt-2">${msg.message}</p>
+                    </div>
+                </div>
+            `).join('');
+            document.getElementById('userMessages').innerHTML = messagesHtml || '<p class="text-muted">Нет сообщений</p>';
+
+            // Отображаем напоминания
+            const remindersHtml = data.reminders.map(rem => `
+                <div class="card mb-2">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <small class="text-muted">${formatDate(rem.time)}</small>
+                        </div>
+                        <p class="mb-0 mt-2">${rem.text}</p>
+                    </div>
+                </div>
+            `).join('');
+            document.getElementById('userReminders').innerHTML = remindersHtml || '<p class="text-muted">Нет напоминаний</p>';
+
+            // Показываем модальное окно
+            const modal = new bootstrap.Modal(document.getElementById('userDetailsModal'));
+            modal.show();
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Ошибка при загрузке данных пользователя');
+        });
+}
+</script>
+{% endblock %} 

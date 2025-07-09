@@ -1,0 +1,21 @@
+{
+  "name": "rag-mentor-webapp",
+  "version": "1.0.0",
+  "description": "RAG Mentor Web Application",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js"
+  },
+  "dependencies": {
+    "@telegram-apps/telegram-ui": "^2.1.3",
+    "express": "^4.18.0",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0"
+  },
+  "keywords": ["telegram", "mini-app", "rag", "ai"],
+  "author": "RAG Mentor Team",
+  "license": "MIT"
+} 

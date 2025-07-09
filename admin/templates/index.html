@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Промпты</h5>
+                <p class="card-text">Управление промптами для бота</p>
+                <a href="{{ url_for('prompts') }}" class="btn btn-primary">Перейти к промптам</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">RAG Документы</h5>
+                <p class="card-text">Управление документами для RAG системы</p>
+                <a href="{{ url_for('documents') }}" class="btn btn-primary">Перейти к документам</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Пользователи</h5>
+                <p class="card-text">Информация о пользователях бота</p>
+                <a href="{{ url_for('users') }}" class="btn btn-primary">Перейти к пользователям</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Статистика</h5>
+                <p class="card-text">Аналитика и графики использования бота</p>
+                <a href="{{ url_for('statistics') }}" class="btn btn-success">Посмотреть статистику</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Системные операции</h5>
+                <p class="card-text">Управление системными функциями и настройками</p>
+                <a href="{{ url_for('system') }}" class="btn btn-warning">Перейти к системным операциям</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

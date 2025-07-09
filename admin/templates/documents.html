@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="mb-4">Управление RAG Документами</h1>
+
+<!-- Форма добавления документа -->
+<div class="card mb-4">
+    <div class="card-header">
+        Добавить новый документ
+    </div>
+    <div class="card-body">
+        <form action="{{ url_for('add_document') }}" method="post" enctype="multipart/form-data">
+            <div class="mb-3">
+                <label for="file" class="form-label">Выберите .txt файл</label>
+                <input type="file" class="form-control" id="file" name="file" accept=".txt" required>
+            </div>
+            <div class="mb-3">
+                <label for="pack_name" class="form-label">Выберите пакет</label>
+                <select class="form-select" id="pack_name" name="pack_name" required>
+                    <option value="" disabled selected>-- Выберите пакет --</option>
+                    {% for pack_name in documents.keys() %}
+                        <option value="{{ pack_name }}">{{ pack_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">Добавить</button>
+        </form>
+    </div>
+</div>
+
+<!-- Список документов по пакетам -->
+{% for pack_name, docs in documents.items() %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h4>Пакет: {{ pack_name }}</h4>
+    </div>
+    <div class="card-body">
+        {% if docs %}
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Имя файла</th>
+                    <th>Размер (байт)</th>
+                    <th>Дата изменения</th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for doc in docs %}
+                <tr>
+                    <td>{{ doc.filename }}</td>
+                    <td>{{ doc.size }}</td>
+                    <td>{{ doc.modified|datetime }}</td>
+                    <td>
+                        <button class="btn btn-sm btn-info view-doc-btn" data-pack="{{ pack_name }}" data-filename="{{ doc.filename }}">Просмотреть</button>
+                        <button class="btn btn-sm btn-danger delete-doc-btn" data-pack="{{ pack_name }}" data-filename="{{ doc.filename }}">Удалить</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>В этом пакете нет документов.</p>
+        {% endif %}
+    </div>
+</div>
+{% endfor %}
+
+<!-- Модальное окно для просмотра документа -->
+<div class="modal fade" id="viewDocModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="viewDocModalLabel">Просмотр документа</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <pre id="docContentView"></pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const viewDocModal = new bootstrap.Modal(document.getElementById('viewDocModal'));
+
+    // Просмотр документа
+    document.querySelectorAll('.view-doc-btn').forEach(button => {
+        button.addEventListener('click', function () {
+            const pack = this.dataset.pack;
+            const filename = this.dataset.filename;
+            fetch(`/documents/${pack}/${filename}`)
+                .then(response => response.text())
+                .then(text => {
+                    document.getElementById('docContentView').textContent = text;
+                    document.getElementById('viewDocModalLabel').textContent = `Просмотр: ${filename}`;
+                    viewDocModal.show();
+                });
+        });
+    });
+
+    // Удаление документа
+    document.querySelectorAll('.delete-doc-btn').forEach(button => {
+        button.addEventListener('click', function () {
+            const pack = this.dataset.pack;
+            const filename = this.dataset.filename;
+            if (confirm(`Вы уверены, что хотите удалить ${filename} из пакета ${pack}?`)) {
+                fetch(`/documents/${pack}/${filename}`, {
+                    method: 'DELETE',
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        window.location.reload();
+                    } else {
+                        alert('Ошибка при удалении: ' + data.error);
+                    }
+                });
+            }
+        });
+    });
+});
+</script>
+{% endblock %} 

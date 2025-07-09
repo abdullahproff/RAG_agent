@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2>Системные операции</h2>
+        <p class="text-muted">Управление системными функциями и настройками бота</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-trash"></i> Очистка кеша
+                </h5>
+                <p class="card-text">
+                    Полная очистка кеша ответов <strong>всех систем</strong>: телеграм-бота и веб-приложения. Это действие удалит все сохраненные ответы и заставит системы генерировать их заново.
+                </p>
+                <div class="alert alert-warning" role="alert">
+                    <strong>Внимание!</strong> Это действие нельзя отменить. После очистки кеша первые ответы пользователей будут генерироваться дольше в обеих системах.
+                </div>
+                <button type="button" class="btn btn-danger" onclick="clearCache()">
+                    <i class="bi bi-trash"></i> Очистить кеш
+                </button>
+                <div id="cache-result" class="mt-3"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-send"></i> Отправка сообщения всем пользователям
+                </h5>
+                <p class="card-text">
+                    Отправка сообщения всем пользователям бота. Сообщение будет отправлено всем пользователям, которые когда-либо взаимодействовали с ботом.
+                </p>
+                <div class="alert alert-warning" role="alert">
+                    <strong>Внимание!</strong> Это действие нельзя отменить. Сообщение будет отправлено всем пользователям.
+                </div>
+                <div class="mb-3">
+                    <textarea class="form-control" id="messageText" rows="4" placeholder="Введите текст сообщения..."></textarea>
+                </div>
+                <button type="button" class="btn btn-primary" onclick="sendMessage()">
+                    <i class="bi bi-send"></i> Отправить сообщение
+                </button>
+                <div id="message-result" class="mt-3"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function clearCache() {
+    if (confirm('Вы уверены, что хотите очистить кеш всех систем (телеграм-бот + веб-приложение)? Это действие нельзя отменить.')) {
+        const resultDiv = document.getElementById('cache-result');
+        resultDiv.innerHTML = '<div class="alert alert-info">Очистка кешей всех систем...</div>';
+        
+        fetch('/system/clear-cache', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                resultDiv.innerHTML = '<div class="alert alert-success">' + data.message + '</div>';
+            } else {
+                resultDiv.innerHTML = '<div class="alert alert-danger">Ошибка: ' + data.error + '</div>';
+            }
+            
+            // Скрыть сообщение через 5 секунд
+            setTimeout(() => {
+                resultDiv.innerHTML = '';
+            }, 5000);
+        })
+        .catch(error => {
+            resultDiv.innerHTML = '<div class="alert alert-danger">Ошибка сети: ' + error.message + '</div>';
+            setTimeout(() => {
+                resultDiv.innerHTML = '';
+            }, 5000);
+        });
+    }
+}
+
+function sendMessage() {
+    const messageText = document.getElementById('messageText').value.trim();
+    if (!messageText) {
+        alert('Пожалуйста, введите текст сообщения');
+        return;
+    }
+    
+    if (confirm('Вы уверены, что хотите отправить это сообщение всем пользователям? Это действие нельзя отменить.')) {
+        const resultDiv = document.getElementById('message-result');
+        resultDiv.innerHTML = '<div class="alert alert-info">Отправка сообщения...</div>';
+        
+        fetch('/system/send-message', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ message: messageText })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                resultDiv.innerHTML = '<div class="alert alert-success">' + data.message + '</div>';
+                document.getElementById('messageText').value = '';
+            } else {
+                resultDiv.innerHTML = '<div class="alert alert-danger">Ошибка: ' + data.error + '</div>';
+            }
+            
+            // Скрыть сообщение через 5 секунд
+            setTimeout(() => {
+                resultDiv.innerHTML = '';
+            }, 5000);
+        })
+        .catch(error => {
+            resultDiv.innerHTML = '<div class="alert alert-danger">Ошибка сети: ' + error.message + '</div>';
+            setTimeout(() => {
+                resultDiv.innerHTML = '';
+            }, 5000);
+        });
+    }
+}
+</script>
+{% endblock %} 

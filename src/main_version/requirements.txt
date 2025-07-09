@@ -6,8 +6,8 @@ fastapi==0.115.10
 uvicorn==0.34.0
 faiss-cpu==1.10.0
 langchain-community==0.3.18
-langchain-gigachat==0.3.4
-langchain-huggingface==0.1.2
+langchain-gigachat==0.3.10
+langchain-huggingface
 sentence-transformers==3.4.1
 schedule==1.2.2
 pytz==2025.1

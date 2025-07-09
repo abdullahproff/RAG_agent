@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Управление промптами</h2>
+    <a href="{{ url_for('add_prompt') }}" class="btn btn-primary">Добавить промпт</a>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Вопрос</th>
+                <th>Шаблон промпта</th>
+                <th>Дата создания</th>
+                <th>Действия</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for prompt in prompts %}
+            <tr>
+                <td>{{ prompt.question_id }}</td>
+                <td>{{ prompt.question_text }}</td>
+                <td>
+                    <div style="max-height: 100px; overflow-y: auto;">
+                        {{ prompt.prompt_template }}
+                    </div>
+                </td>
+                <td>{{ prompt.created_at }}</td>
+                <td>
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-sm btn-primary" 
+                                onclick="editPrompt({{ prompt.question_id }})">
+                            Редактировать
+                        </button>
+                        <button type="button" class="btn btn-sm btn-danger" 
+                                onclick="deletePrompt({{ prompt.question_id }})">
+                            Удалить
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Модальное окно для редактирования -->
+<div class="modal fade" id="editModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Редактировать промпт</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editForm" method="POST">
+                    <input type="hidden" id="editPromptId" name="prompt_id">
+                    <div class="mb-3">
+                        <label for="editQuestionId" class="form-label">ID вопроса</label>
+                        <input type="number" class="form-control" id="editQuestionId" name="question_id" required min="1">
+                        <div class="form-text">Уникальный числовой идентификатор для вопроса</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editQuestionText" class="form-label">Вопрос</label>
+                        <input type="text" class="form-control" id="editQuestionText" name="question_text" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editPromptTemplate" class="form-label">Шаблон промпта</label>
+                        <textarea class="form-control" id="editPromptTemplate" name="prompt_template" rows="4" required></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="submitEdit()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function editPrompt(id) {
+    fetch(`/prompts/${id}`)
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('editPromptId').value = data.question_id;
+            document.getElementById('editQuestionId').value = data.question_id;
+            document.getElementById('editQuestionText').value = data.question_text;
+            document.getElementById('editPromptTemplate').value = data.prompt_template;
+            const modal = new bootstrap.Modal(document.getElementById('editModal'));
+            modal.show();
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Ошибка при загрузке данных промпта');
+        });
+}
+
+function deletePrompt(id) {
+    if (confirm('Вы уверены, что хотите удалить этот промпт?')) {
+        fetch(`/prompts/${id}`, {
+            method: 'DELETE',
+        }).then(response => {
+            if (response.ok) {
+                location.reload();
+            } else {
+                alert('Ошибка при удалении промпта');
+            }
+        });
+    }
+}
+
+function submitEdit() {
+    const form = document.getElementById('editForm');
+    const promptId = document.getElementById('editPromptId').value;
+    const formData = new FormData(form);
+    
+    fetch(`/prompts/${promptId}`, {
+        method: 'POST',
+        body: formData
+    }).then(response => {
+        if (response.ok) {
+            location.reload();
+        } else {
+            alert('Ошибка при обновлении промпта');
+        }
+    });
+}
+</script>
+{% endblock %} 

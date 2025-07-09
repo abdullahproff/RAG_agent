@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h3>Добавить новый промпт</h3>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="question_id" class="form-label">ID вопроса</label>
+                        <input type="number" class="form-control" id="question_id" name="question_id" 
+                               placeholder="Введите уникальный ID вопроса" required min="1">
+                        <div class="form-text">Уникальный числовой идентификатор для вопроса (например: 1, 2, 3...)</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="question_text" class="form-label">Вопрос</label>
+                        <input type="text" class="form-control" id="question_text" name="question_text" 
+                               placeholder="Введите вопрос" required>
+                        <div class="form-text">Вопрос, на который будет отвечать этот промпт</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="prompt_template" class="form-label">Шаблон промпта</label>
+                        <textarea class="form-control" id="prompt_template" name="prompt_template" 
+                                  rows="6" placeholder="Введите шаблон промпта" required></textarea>
+                        <div class="form-text">Шаблон промпта, который будет использоваться для генерации ответа</div>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('prompts') }}" class="btn btn-secondary">Отмена</a>
+                        <button type="submit" class="btn btn-primary">Добавить</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 
